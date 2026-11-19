@@ -39,8 +39,6 @@
   .glow-sky{animation:pulse-glow-sky 2s infinite;}
   @keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
   .animate-float{animation:float 3s ease-in-out infinite;}
-  /* ネームタグ用 */
-  .nametag-sprite{pointer-events:none;}
 </style>
 </head>
 <body class="w-screen h-screen relative overflow-hidden bg-slate-950">
@@ -154,7 +152,6 @@
     <h1 class="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-amber-300 to-emerald-400 mb-2">Googleでログイン</h1>
     <p class="text-xs text-slate-400 mb-6">プレイするにはGoogleアカウントでログインしてください。<br>ユーザーネームはプレイヤー頭上に表示されます。</p>
 
-    <!-- Step 1: ログイン -->
     <div id="auth-step-login">
       <button id="btn-google-login" class="game-btn w-full py-3.5 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-black text-base flex items-center justify-center gap-3 shadow-lg">
         <svg class="w-5 h-5" viewBox="0 0 48 48">
@@ -168,7 +165,6 @@
       <div id="auth-error" class="text-xs text-rose-400 mt-3 hidden"></div>
     </div>
 
-    <!-- Step 2: ユーザーネーム設定 -->
     <div id="auth-step-name" class="hidden">
       <div class="mb-4">
         <img id="auth-avatar" class="w-16 h-16 rounded-full mx-auto border-2 border-emerald-400/60 mb-2" alt="">
@@ -182,7 +178,6 @@
       <button id="btn-save-name" class="game-btn w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-base">はじめる</button>
     </div>
 
-    <!-- Step 3: ログイン済み -->
     <div id="auth-step-done" class="hidden">
       <div class="mb-5">
         <img id="done-avatar" class="w-20 h-20 rounded-full mx-auto border-2 border-emerald-400/60 mb-2" alt="">
@@ -196,7 +191,6 @@
   </div>
 </div>
 
-<!-- ===== タイトル（ロビー）===== -->
 <div id="title-screen" class="hidden absolute inset-0 z-30 items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md overflow-y-auto">
   <div class="max-w-3xl w-full bg-slate-900/92 border border-slate-700/80 rounded-3xl p-5 sm:p-7 shadow-2xl my-auto">
     <div class="text-center mb-4">
@@ -301,42 +295,50 @@
   </div>
 </div>
 
-<!-- ===== Firebase SDK (module) ===== -->
+<!-- ================================================
+     Firebase SDK (v13.4.0) - 提供された設定をそのまま使用
+     ゲーム本体（通常script）より先に読み込み、window.FB に公開する
+================================================ -->
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-analytics.js";
   import {
     getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
   import {
     getFirestore, doc, getDoc, setDoc, serverTimestamp
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
   import {
-    getDatabase, ref, set as rtSet, onDisconnect, serverTimestamp as rtServerTimestamp
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    getDatabase, ref as rtRef, set as rtSet, onValue, onDisconnect,
+    serverTimestamp as rtServerTimestamp, remove as rtRemove
+  } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js";
 
-  // ★ ここを自分のFirebaseプロジェクト設定に置き換える
+  // ★ 提供されたFirebase設定
   const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID",
-    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com"
+    apiKey: "AIzaSyAOeVJLFM4IZUYr8Nn0ggEjViawmSYoK1I",
+    authDomain: "dggm-eb932.firebaseapp.com",
+    databaseURL: "https://dggm-eb932-default-rtdb.firebaseio.com",
+    projectId: "dggm-eb932",
+    storageBucket: "dggm-eb932.firebasestorage.app",
+    messagingSenderId: "98596993564",
+    appId: "1:98596993564:web:bb7f3fd0dd318ba7413dd9",
+    measurementId: "G-6Z7WSLEXPM"
   };
 
   const app = initializeApp(firebaseConfig);
+  try { getAnalytics(app); } catch(e) { console.warn('analytics init failed', e); }
+
   const auth = getAuth(app);
   const db = getFirestore(app);
   const rtdb = getDatabase(app);
   const provider = new GoogleAuthProvider();
 
-  // グローバルに公開（ゲーム本体から使う）
+  // グローバルに公開
   window.FB = {
     app, auth, db, rtdb, provider,
     signInWithPopup, onAuthStateChanged, signOut,
     doc, getDoc, setDoc, serverTimestamp,
-    rtRef: ref, rtSet, onDisconnect, rtServerTimestamp
+    rtRef, rtSet, onValue, onDisconnect, rtServerTimestamp, rtRemove
   };
   window.dispatchEvent(new Event('fb-ready'));
 </script>
@@ -349,8 +351,8 @@
 // ==========================================
 const APP = {
   user: null,
-  profile: null, // { username, photoURL, email, uid }
-  roomId: null,
+  profile: null,
+  roomId: 'global-room',
   ready: false
 };
 
@@ -536,7 +538,7 @@ function createProp3DMesh(typeId){
 }
 
 // ==========================================
-// キャラクター（関節）
+// キャラクター
 // ==========================================
 function createCharacterMesh(bodyColor,isSeeker=false){
   const g=new THREE.Group();
@@ -714,20 +716,19 @@ function animateCharacter(charMesh,dt,moveSpeed,isGrounded,time){
 }
 
 // ==========================================
-// ネームタグ（頭上表示）
+// ネームタグ
 // ==========================================
-function createNametagSprite(text, color='#ffffff', bgColor='rgba(15,23,42,0.85)'){
+function createNametagSprite(text){
   const canvas=document.createElement('canvas');
   canvas.width=256;canvas.height=64;
   const c=canvas.getContext('2d');
-  c.font='900 32px "M PLUS Rounded 1c", sans-serif';
+  c.font='900 30px "M PLUS Rounded 1c", sans-serif';
   c.textAlign='center';c.textBaseline='middle';
-  const w=c.measureText(text).width+32;
+  const w=Math.min(240, c.measureText(text).width+32);
   const x=(256-w)/2;
-  // 背景
-  c.fillStyle=bgColor;
-  c.beginPath();
+  c.fillStyle='rgba(15,23,42,0.9)';
   const r=12;
+  c.beginPath();
   c.moveTo(x+r,8);
   c.lineTo(x+w-r,8);c.quadraticCurveTo(x+w,8,x+w,8+r);
   c.lineTo(x+w,56-r);c.quadraticCurveTo(x+w,56,x+w-r,56);
@@ -735,8 +736,9 @@ function createNametagSprite(text, color='#ffffff', bgColor='rgba(15,23,42,0.85)
   c.lineTo(x,8+r);c.quadraticCurveTo(x,8,x+r,8);
   c.closePath();
   c.fill();
-  // テキスト
-  c.fillStyle=color;
+  c.strokeStyle='rgba(56,189,248,0.8)';
+  c.lineWidth=2;c.stroke();
+  c.fillStyle='#ffffff';
   c.fillText(text,128,34);
   const tex=new THREE.CanvasTexture(canvas);
   tex.minFilter=THREE.LinearFilter;
@@ -747,7 +749,6 @@ function createNametagSprite(text, color='#ffffff', bgColor='rgba(15,23,42,0.85)
   return sprite;
 }
 
-// ネームタグをキャラクターに付与
 function attachNametag(mesh, text){
   if(!mesh)return null;
   if(mesh.userData.nametag){
@@ -755,21 +756,15 @@ function attachNametag(mesh, text){
     if(mesh.userData.nametag.material.map)mesh.userData.nametag.material.map.dispose();
     mesh.userData.nametag.material.dispose();
   }
-  const tag=createNametagSprite(text,'#ffffff','rgba(30,41,59,0.9)');
-  tag.position.set(0,2.55,0); // 頭の上
+  const tag=createNametagSprite(text);
+  tag.position.set(0,2.55,0);
   mesh.add(tag);
   mesh.userData.nametag=tag;
   return tag;
 }
 
-// ネームタグの表示/非表示
-function setNametagVisible(mesh, visible){
-  if(!mesh||!mesh.userData.nametag)return;
-  mesh.userData.nametag.visible=visible;
-}
-
 // ==========================================
-// Three.js 初期化
+// Three.js
 // ==========================================
 const container=document.getElementById('canvas-container');
 const scene=new THREE.Scene();
@@ -844,7 +839,7 @@ let seekersList=[];
 let runnersList=[];
 let propHiders=[];
 let fxList=[];
-let remotePlayers={}; // マルチプレイ用
+let remotePlayers={};
 
 const keys={};
 const joystick={active:false,dx:0,dy:0,touchId:null};
@@ -867,13 +862,11 @@ function showAuthStep(step){
   if(step==='name')authStepName.classList.remove('hidden');
   if(step==='done')authStepDone.classList.remove('hidden');
 }
-
 function showAuthError(msg){
   authError.textContent=msg;
   authError.classList.remove('hidden');
 }
 
-// Firebase準備待ち
 window.addEventListener('fb-ready',()=>{
   APP.ready=true;
   initAuthListener();
@@ -889,7 +882,6 @@ function initAuthListener(){
       showAuthStep('login');
       return;
     }
-    // Firestore からプロフィール取得
     try{
       const snap=await FB.getDoc(FB.doc(FB.db,'users',user.uid));
       if(snap.exists() && snap.data().username){
@@ -898,7 +890,6 @@ function initAuthListener(){
         showAuthStep('done');
         authScreen.classList.remove('hidden');
       } else {
-        // 初回 → ネーム設定
         document.getElementById('auth-avatar').src=user.photoURL || '';
         document.getElementById('auth-email').textContent=user.email || '';
         showAuthStep('name');
@@ -953,7 +944,6 @@ document.getElementById('btn-save-name').addEventListener('click', async ()=>{
     APP.profile=profile;
     updateAuthDoneUI();
     showAuthStep('done');
-    // 名前を頭上のネームタグに反映
     if(player.mesh){
       attachNametag(player.mesh, name);
       applyNametagVisibility();
@@ -968,8 +958,6 @@ document.getElementById('btn-enter-lobby').addEventListener('click', ()=>{
   authScreen.classList.add('hidden');
   document.getElementById('title-screen').classList.remove('hidden');
   gameState.screen='title';
-  // 頭上のネームタグ更新
-  if(player.mesh)applyNametagVisibility();
 });
 
 document.getElementById('btn-change-name').addEventListener('click', ()=>{
@@ -983,7 +971,7 @@ document.getElementById('btn-logout').addEventListener('click', async ()=>{
 });
 
 // ==========================================
-// ワールド構築（前回と同じ。長いので関数名だけ確認）
+// ワールド構築
 // ==========================================
 function build3DWorld(mode,isPhSeeker){
   scene.remove(worldGroup);
@@ -999,6 +987,11 @@ function build3DWorld(mode,isPhSeeker){
 
   colliders=[];propsList=[];jumpPads=[];boostPads=[];
   coinsList=[];seekersList=[];runnersList=[];propHiders=[];fxList=[];
+  // リモートメッシュも破棄
+  Object.values(remotePlayers).forEach(rp=>{
+    if(rp.mesh)worldGroup.remove(rp.mesh);
+  });
+  remotePlayers={};
 
   const ground=new THREE.Mesh(
     new THREE.PlaneGeometry(ARENA_HALF*2,ARENA_HALF*2),
@@ -1300,7 +1293,7 @@ function spawnStarCoin(){
 }
 
 // ==========================================
-// FPS ターゲット等（前回同様）
+// FPS
 // ==========================================
 const FPS_COLORS=[0xef4444,0xf97316,0xeab308,0x22c55e,0x06b6d4,0x8b5cf6,0xec4899];
 const FPS_SHAPES=['sphere','cube','octahedron','torus'];
@@ -1318,8 +1311,7 @@ function createFPSTargetMesh(color,shape,isBonus=false){
   else if(shape==='cube')body=new THREE.Mesh(new THREE.BoxGeometry(isBonus?1.2:1.0,isBonus?1.2:1.0,isBonus?1.2:1.0),mat);
   else if(shape==='octahedron')body=new THREE.Mesh(new THREE.OctahedronGeometry(isBonus?0.85:0.7,0),mat);
   else body=new THREE.Mesh(new THREE.TorusGeometry(isBonus?0.6:0.5,isBonus?0.24:0.2,12,24),mat);
-  body.castShadow=true;
-  g.add(body);
+  body.castShadow=true;g.add(body);
   const core=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,10),
     new THREE.MeshBasicMaterial({color:0xffffff}));
   g.add(core);
@@ -1341,8 +1333,7 @@ function createFPSTargetMesh(color,shape,isBonus=false){
 function createDroneMesh(){
   const g=new THREE.Group();
   const bodyMat=new THREE.MeshStandardMaterial({color:0x1e293b,roughness:0.3,metalness:0.7});
-  const body=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.3,0.6),bodyMat);
-  g.add(body);
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.3,0.6),bodyMat);g.add(body);
   const eye=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,10),
     new THREE.MeshStandardMaterial({color:0xf43f5e,emissive:0xf43f5e,emissiveIntensity:1}));
   eye.position.set(0,0,0.32);g.add(eye);
@@ -1502,7 +1493,6 @@ function startGame(mode){
   camCtrl.targetDist=6.2;
 
   rebuildPlayerMesh(isSeeker);
-  // 頭上のネームタグ（プレイヤー名）
   if(APP.profile?.username && player.mesh && gameState.mode!=='fps'){
     attachNametag(player.mesh, APP.profile.username);
   }
@@ -1541,7 +1531,6 @@ function startGame(mode){
     document.getElementById('reticle-container').style.display='none';
     updateFPSHUD();
     showBanner('FPS スタート！',`${gameState.fpsDiff.toUpperCase()} / ボーナス・ドローン・オーブを活用せよ！`);
-    // FPSでは頭上のネームタグは常に非表示（自分なので）
   } else {
     jumpBtn.style.display='';
     document.getElementById('reticle-container').style.display='flex';
@@ -1705,19 +1694,20 @@ function createAIRunner(x,z,idx){
 }
 
 // ==========================================
-// 頭上ネームタグ表示制御（かくれんぼ隠れる側は非表示）
+// ネームタグ可視性（かくれんぼ隠れる側は非表示）
 // ==========================================
 function applyNametagVisibility(){
-  // 自分のネームタグ
+  // 自分
   if(player.mesh && player.mesh.userData.nametag){
     let visible=true;
     if(gameState.mode==='fps') visible=false;
-    if(gameState.mode==='prophunt'&&gameState.phRole==='hider') visible=false;
+    if(gameState.mode==='prophunt'){
+      // 隠れる側: 常に非表示 / 鬼側: 自分のタグは表示（任意）
+      if(gameState.phRole==='hider') visible=false;
+    }
     player.mesh.userData.nametag.visible=visible;
   }
-  // 他プレイヤー（AI）ネームタグ
-  // 鬼ごっこ: 全員表示
-  // かくれんぼ: 隠れる側（runnersList相当は出ないが、リモートプレイヤー隠れ側）は非表示
+  // AI runner（鬼ごっこ用）は鬼ごっこモードで表示
   runnersList.forEach(r=>{
     if(r.mesh?.userData.nametag){
       r.mesh.userData.nametag.visible=(gameState.mode!=='prophunt');
@@ -1730,14 +1720,19 @@ function applyNametagVisibility(){
   Object.values(remotePlayers).forEach(rp=>{
     if(rp.mesh?.userData.nametag){
       let vis=true;
-      if(gameState.mode==='prophunt'&&rp.disguise) vis=false; // 隠れ側は非表示
+      if(gameState.mode==='fps') vis=false;
+      if(gameState.mode==='prophunt'){
+        // かくれんぼ: 隠れる側（変身中 or hider想定）は非表示
+        if(rp.disguise) vis=false;
+        else if(rp.mode==='prophunt') vis=false;
+      }
       rp.mesh.userData.nametag.visible=vis;
     }
   });
 }
 
 // ==========================================
-// アクション（前回と同じ）
+// アクション
 // ==========================================
 function triggerMorph(){
   if(gameState.screen!=='playing'||gameState.mode!=='prophunt'||gameState.phRole!=='hider')return;
@@ -1876,7 +1871,7 @@ function triggerTaunt(){
 }
 
 // ==========================================
-// FPS 射撃
+// FPS射撃
 // ==========================================
 function shootFPS(){
   if(gameState.mode!=='fps'||gameState.screen!=='playing')return;
@@ -2039,16 +2034,19 @@ function resolveHorizontalCollisions(pos,radius,currentY){
 }
 
 // ==========================================
-// マルチプレイ publish/subscribe
+// Realtime DB publish/subscribe
 // ==========================================
 let publishTimer=null;
+let unsubscribeRoom=null;
+
 function startPublishing(){
-  if(publishTimer)clearInterval(publishTimer);
+  stopPublishing();
   if(!APP.profile?.uid)return;
-  APP.roomId='global-room';
   const FB=window.FB;
   const myRef=FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players/${APP.profile.uid}`);
   FB.onDisconnect(myRef).remove();
+
+  // 10Hz送信
   publishTimer=setInterval(()=>{
     if(!APP.profile?.uid||gameState.screen!=='playing')return;
     FB.rtSet(myRef,{
@@ -2057,22 +2055,85 @@ function startPublishing(){
       z:+player.pos.z.toFixed(2),
       ry:+player.rotY.toFixed(2),
       username:APP.profile.username,
-      disguise:player.disguise?.id??null,
+      photoURL:APP.profile.photoURL || '',
+      disguise:player.disguise?.id ?? null,
       locked:!!player.locked,
       mode:gameState.mode,
+      role:gameState.mode==='tag'?gameState.tagRole:(gameState.mode==='prophunt'?gameState.phRole:'player'),
       updatedAt:Date.now()
     }).catch(()=>{});
   },100);
-  // 他人の購読
-  FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players`);
-  // 購読はFBモジュールにonValueを公開していないので、簡易的にsetIntervalでポーリングしない → onValueを追加公開するのが望ましい
+
+  // 購読
+  const playersRef=FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players`);
+  unsubscribeRoom=FB.onValue(playersRef,(snap)=>{
+    const data=snap.val()||{};
+    // 削除されたリモートプレイヤーを消す
+    Object.keys(remotePlayers).forEach(uid=>{
+      if(!data[uid]){
+        const rp=remotePlayers[uid];
+        if(rp.mesh)worldGroup.remove(rp.mesh);
+        delete remotePlayers[uid];
+      }
+    });
+    // 追加/更新
+    Object.entries(data).forEach(([uid,p])=>{
+      if(uid===APP.profile?.uid)return;
+      if(gameState.screen!=='playing')return;
+      // 他モードは非表示
+      if(p.mode!==gameState.mode)return;
+
+      let rp=remotePlayers[uid];
+      if(!rp){
+        const mesh=createCharacterMesh(0x38bdf8,false);
+        worldGroup.add(mesh);
+        rp={mesh,uid,targetPos:new THREE.Vector3(p.x,p.y,p.z),lastMode:p.mode,disguise:null};
+        remotePlayers[uid]=rp;
+        if(p.username)attachNametag(mesh, p.username);
+      }
+      rp.targetPos.set(p.x,p.y,p.z);
+      rp.disguise=p.disguise;
+      rp.mode=p.mode;
+      rp.role=p.role;
+      rp.username=p.username;
+      // 変身中ならプロップメッシュに置き換え（簡易）
+      if(p.disguise && !rp.disguiseMesh){
+        const dm=createProp3DMesh(p.disguise);
+        dm.position.copy(rp.mesh.position);
+        worldGroup.add(dm);
+        rp.mesh.visible=false;
+        rp.disguiseMesh=dm;
+      } else if(!p.disguise && rp.disguiseMesh){
+        worldGroup.remove(rp.disguiseMesh);
+        rp.disguiseMesh=null;
+        rp.mesh.visible=true;
+      }
+      // ネームタグ可視性を再評価
+      applyNametagVisibility();
+    });
+  });
 }
+
 function stopPublishing(){
   if(publishTimer){clearInterval(publishTimer);publishTimer=null;}
-  if(APP.profile?.uid){
+  if(unsubscribeRoom){try{unsubscribeRoom();}catch(e){};unsubscribeRoom=null;}
+  if(APP.profile?.uid && window.FB){
     const FB=window.FB;
-    FB.rtSet(FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players/${APP.profile.uid}`),null).catch(()=>{});
+    FB.rtRemove(FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players/${APP.profile.uid}`)).catch(()=>{});
   }
+}
+
+function updateRemotePlayers(dt){
+  Object.values(remotePlayers).forEach(rp=>{
+    if(!rp.mesh)return;
+    // 補間
+    rp.mesh.position.lerp(rp.targetPos,Math.min(1,dt*10));
+    if(rp.disguiseMesh)rp.disguiseMesh.position.copy(rp.mesh.position);
+    // 向き
+    const dx=rp.targetPos.x-rp.mesh.position.x;
+    const dz=rp.targetPos.z-rp.mesh.position.z;
+    if(Math.hypot(dx,dz)>0.1)rp.mesh.rotation.y=Math.atan2(dx,dz);
+  });
 }
 
 // ==========================================
@@ -2238,6 +2299,7 @@ function update(dt){
   updateAISeekers(dt);
   updateAIRunners(dt);
   updateNpcHiders(dt);
+  updateRemotePlayers(dt);
   if(gameState.mode==='prophunt'&&gameState.phRole==='hider')updateCrosshairTarget();
 
   if(gameState.mode==='fps')updateFPSCamera(dt);
@@ -2292,11 +2354,8 @@ function updateFPSTargets(dt){
     t.mesh.position.set(t.x,t.y,t.z);
     t.mesh.rotation.y+=dt*1.5;
     t.mesh.rotation.x=Math.sin(t.phase*0.7)*0.3;
-    if(t.life<1.2){
-      t.mesh.visible=Math.floor(t.life*12)%2===0;
-    } else {
-      t.mesh.visible=true;
-    }
+    if(t.life<1.2)t.mesh.visible=Math.floor(t.life*12)%2===0;
+    else t.mesh.visible=true;
   }
 }
 
@@ -2304,11 +2363,7 @@ function updateFPSDrones(dt){
   for(let i=gameState.fps.drones.length-1;i>=0;i--){
     const d=gameState.fps.drones[i];
     d.life-=dt;
-    if(d.life<=0){
-      worldGroup.remove(d.mesh);
-      gameState.fps.drones.splice(i,1);
-      continue;
-    }
+    if(d.life<=0){worldGroup.remove(d.mesh);gameState.fps.drones.splice(i,1);continue;}
     d.orbitAngle+=dt*d.orbitSpeed;
     d.bobPhase+=dt*2;
     d.x=d.spawnX+Math.cos(d.orbitAngle)*d.orbitRadius;
@@ -2316,9 +2371,7 @@ function updateFPSDrones(dt){
     d.y=2.5+Math.sin(d.bobPhase)*0.8;
     d.mesh.position.set(d.x,d.y,d.z);
     d.mesh.rotation.y+=dt*2;
-    if(d.mesh.userData.props){
-      d.mesh.userData.props.forEach(p=>{p.rotation.y+=dt*15;});
-    }
+    if(d.mesh.userData.props)d.mesh.userData.props.forEach(p=>{p.rotation.y+=dt*15;});
   }
 }
 
@@ -2326,18 +2379,13 @@ function updateFPSOrbs(dt){
   for(let i=gameState.fps.orbs.length-1;i>=0;i--){
     const o=gameState.fps.orbs[i];
     o.life-=dt;
-    if(o.life<=0){
-      worldGroup.remove(o.mesh);
-      gameState.fps.orbs.splice(i,1);
-      continue;
-    }
+    if(o.life<=0){worldGroup.remove(o.mesh);gameState.fps.orbs.splice(i,1);continue;}
     o.bobPhase+=dt*3;
     o.mesh.position.y=o.y+Math.sin(o.bobPhase)*0.25;
     o.mesh.rotation.y+=dt*1.5;
     if(o.mesh.userData.ring)o.mesh.userData.ring.rotation.z+=dt*2;
-    if(o.life<1.5){
-      o.mesh.visible=Math.floor(o.life*12)%2===0;
-    } else o.mesh.visible=true;
+    if(o.life<1.5)o.mesh.visible=Math.floor(o.life*12)%2===0;
+    else o.mesh.visible=true;
   }
 }
 
@@ -2414,13 +2462,11 @@ function updateAISeekers(dt){
       sound.playHit();
       spawn3DBurst(player.pos.x,player.pos.y+1,player.pos.z,0xf43f5e,18);
       pushToast(`💥 鬼にタッチされた！残りHP: ${gameState.hp}`,'text-rose-400');
-      // ノックバック
       const kb=new THREE.Vector3().subVectors(player.pos,s.pos).normalize().multiplyScalar(6);
       player.vel.x+=kb.x;player.vel.z+=kb.z;player.vel.y=4;
       updateHeartsHUD();
       if(gameState.hp<=0){endGame(false);return;}
     }
-    // 移動
     if(s.state==='chase'||s.alertTimer>0){
       const dir=new THREE.Vector3().subVectors(player.pos,s.pos);
       dir.y=0;
@@ -2452,7 +2498,6 @@ function updateAISeekers(dt){
     s.mesh.position.copy(s.pos);
     s.mesh.rotation.y=s.rotY;
   });
-  // 危険ビネット
   const vig=document.getElementById('danger-vignette');
   if(minDist<15){
     vig.style.opacity=String(Math.max(0,(15-minDist)/15)*0.85);
@@ -2521,7 +2566,6 @@ function checkSeekerCatchRange(range){
 function updateNpcHiders(dt){
   propHiders.forEach(h=>{
     if(h.caught)return;
-    // 簡易的な揺れ
     h.fleeTimer+=dt;
   });
 }
@@ -2624,7 +2668,6 @@ function updateHeartsHUD(){
 }
 
 function updateDisguiseHUD(){
-  const box=document.getElementById('hud-disguise-box');
   const icon=document.getElementById('hud-disguise-icon');
   const name=document.getElementById('hud-disguise-name');
   if(player.disguise){
@@ -2688,7 +2731,6 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>{keys[e.code]=false;});
 
-// マウス/タッチカメラ
 let mouseDown=false;
 renderer.domElement.addEventListener('mousedown',e=>{
   if(gameState.screen!=='playing')return;
@@ -2788,7 +2830,6 @@ function updateJoystick(cx,cy){
   if(m>1){joystick.dx/=m;joystick.dy/=m;}
 }
 
-// ボタン
 document.getElementById('btn-jump').addEventListener('click',triggerJump);
 document.getElementById('btn-skill').addEventListener('click',triggerSkill);
 document.getElementById('btn-morph').addEventListener('click',triggerMorph);
@@ -2804,7 +2845,6 @@ document.getElementById('btn-quit').addEventListener('click',()=>{
   }
 });
 
-// ロビー
 document.querySelectorAll('.mode-tab').forEach(tab=>{
   tab.addEventListener('click',()=>{
     document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));
@@ -2895,11 +2935,9 @@ function endGame(win,quit=false){
   const score=document.getElementById('result-score');
   const stats=document.getElementById('result-stats');
 
-  if(win){
-    emoji.textContent='🏆';title.textContent='勝利！';sub.textContent='見事に3D空間を制覇しました！';
-  } else {
-    emoji.textContent='💀';title.textContent='敗北...';sub.textContent='もう一度挑戦しよう！';
-  }
+  if(win){emoji.textContent='🏆';title.textContent='勝利！';sub.textContent='見事に3D空間を制覇しました！';}
+  else {emoji.textContent='💀';title.textContent='敗北...';sub.textContent='もう一度挑戦しよう！';}
+
   const finalScore=Math.round(gameState.score);
   score.textContent=`${finalScore.toLocaleString()} pt`;
 
@@ -2933,9 +2971,6 @@ function loop(){
 }
 loop();
 
-// ==========================================
-// 起動時: 認証待ち
-// ==========================================
 showAuthStep('login');
 </script>
 </body>
