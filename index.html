@@ -296,24 +296,22 @@
 </div>
 
 <!-- ================================================
-     Firebase SDK (v13.4.0) - 提供された設定をそのまま使用
-     ゲーム本体（通常script）より先に読み込み、window.FB に公開する
+     Firebase SDK (v13.4.0)
+     Firestoreの通信問題を解決するためLong-Polling強制
 ================================================ -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-analytics.js";
   import {
     getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
   import {
-    getFirestore, doc, getDoc, setDoc, serverTimestamp
+    initializeFirestore, doc, getDoc, setDoc, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
   import {
     getDatabase, ref as rtRef, set as rtSet, onValue, onDisconnect,
     serverTimestamp as rtServerTimestamp, remove as rtRemove
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js";
 
-  // ★ 提供されたFirebase設定
   const firebaseConfig = {
     apiKey: "AIzaSyAOeVJLFM4IZUYr8Nn0ggEjViawmSYoK1I",
     authDomain: "dggm-eb932.firebaseapp.com",
@@ -326,14 +324,24 @@
   };
 
   const app = initializeApp(firebaseConfig);
-  try { getAnalytics(app); } catch(e) { console.warn('analytics init failed', e); }
-
   const auth = getAuth(app);
-  const db = getFirestore(app);
+
+  // ★ Long-Polling を強制してオフラインエラーを回避
+  let db;
+  try{
+    db = initializeFirestore(app, {
+      experimentalForceLongPolling: true
+    });
+    console.log('[Firebase] Firestore initialized with long-polling');
+  }catch(e){
+    console.warn('[Firebase] initializeFirestore failed, fallback', e);
+    const { getFirestore } = await import("https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js");
+    db = getFirestore(app);
+  }
+
   const rtdb = getDatabase(app);
   const provider = new GoogleAuthProvider();
 
-  // グローバルに公開
   window.FB = {
     app, auth, db, rtdb, provider,
     signInWithPopup, onAuthStateChanged, signOut,
@@ -341,6 +349,7 @@
     rtRef, rtSet, onValue, onDisconnect, rtServerTimestamp, rtRemove
   };
   window.dispatchEvent(new Event('fb-ready'));
+  console.log('[Firebase] SDK ready');
 </script>
 
 <script>
@@ -865,16 +874,24 @@ function showAuthStep(step){
 function showAuthError(msg){
   authError.textContent=msg;
   authError.classList.remove('hidden');
+  console.error('[Auth]', msg);
+}
+function clearAuthError(){
+  authError.textContent='';
+  authError.classList.add('hidden');
 }
 
 window.addEventListener('fb-ready',()=>{
   APP.ready=true;
+  console.log('[App] Firebase ready, starting auth listener');
   initAuthListener();
 });
 
 function initAuthListener(){
   const FB=window.FB;
   FB.onAuthStateChanged(FB.auth, async (user)=>{
+    clearAuthError();
+    console.log('[Auth] state changed, user=', user ? user.email : 'null');
     APP.user=user;
     if(!user){
       APP.profile=null;
@@ -882,22 +899,38 @@ function initAuthListener(){
       showAuthStep('login');
       return;
     }
+
+    document.getElementById('auth-avatar').src=user.photoURL || '';
+    document.getElementById('auth-email').textContent=user.email || '';
+
+    // Firestore取得を試みる（タイムアウト付き・失敗時フォールバック）
+    let profileLoaded=false;
     try{
-      const snap=await FB.getDoc(FB.doc(FB.db,'users',user.uid));
+      const timeoutPromise=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Firestore timeout (8s)')),8000));
+      const snap=await Promise.race([
+        FB.getDoc(FB.doc(FB.db,'users',user.uid)),
+        timeoutPromise
+      ]);
       if(snap.exists() && snap.data().username){
         APP.profile=snap.data();
         updateAuthDoneUI();
         showAuthStep('done');
         authScreen.classList.remove('hidden');
-      } else {
-        document.getElementById('auth-avatar').src=user.photoURL || '';
-        document.getElementById('auth-email').textContent=user.email || '';
-        showAuthStep('name');
-        authScreen.classList.remove('hidden');
+        profileLoaded=true;
+        console.log('[Auth] existing profile loaded:', APP.profile.username);
       }
     }catch(e){
-      console.error(e);
-      showAuthError('プロフィール取得に失敗しました: '+e.message);
+      console.warn('[Auth] Firestore getDoc failed:', e.code || '', e.message);
+    }
+
+    if(!profileLoaded){
+      // 新規 or Firestore取得失敗 → 名前設定画面へ
+      showAuthStep('name');
+      authScreen.classList.remove('hidden');
+      // ローカルに一時保存済みの名前があれば復元
+      const savedName=localStorage.getItem('dggm_username');
+      if(savedName) document.getElementById('input-username').value=savedName;
+      console.log('[Auth] new/fallback → name step');
     }
   });
 }
@@ -915,48 +948,73 @@ function updateAuthDoneUI(){
 }
 
 document.getElementById('btn-google-login').addEventListener('click', async ()=>{
+  clearAuthError();
   try{
+    console.log('[Auth] starting Google popup');
     await window.FB.signInWithPopup(window.FB.auth, window.FB.provider);
+    console.log('[Auth] popup success');
   }catch(e){
-    console.error(e);
-    showAuthError('ログイン失敗: '+e.message);
+    console.error('[Auth] popup failed:', e.code, e.message);
+    let msg='ログイン失敗：'+e.message;
+    if(e.code==='auth/popup-blocked') msg='ポップアップがブロックされました。ブラウザの設定を確認してください';
+    if(e.code==='auth/popup-closed-by-user') msg='ログインがキャンセルされました';
+    if(e.code==='auth/unauthorized-domain') msg='このドメインは承認されていません。Firebase Console → Authentication → 承認済みドメインに '+location.hostname+' を追加してください';
+    if(e.code==='auth/operation-not-allowed') msg='Google認証が有効化されていません。Firebase Console → Authentication → Sign-in method で Google を有効にしてください';
+    showAuthError(msg);
   }
 });
 
 document.getElementById('btn-save-name').addEventListener('click', async ()=>{
+  clearAuthError();
   const name=document.getElementById('input-username').value.trim();
   if(name.length<1 || name.length>12){
     showAuthError('ユーザーネームは1〜12文字で入力してください');
     return;
   }
   const user=APP.user;
-  if(!user)return;
+  if(!user){showAuthError('ログイン状態が失われました。再度ログインしてください');return;}
+
+  // まずローカル確定
+  APP.profile={
+    uid:user.uid,
+    username:name,
+    email:user.email || '',
+    photoURL:user.photoURL || ''
+  };
+  localStorage.setItem('dggm_username',name);
+
+  // Firestore保存を試みる（失敗しても続行）
   try{
     const FB=window.FB;
-    const profile={
-      uid:user.uid,
-      username:name,
-      email:user.email || '',
-      photoURL:user.photoURL || '',
-      createdAt:FB.serverTimestamp()
-    };
-    await FB.setDoc(FB.doc(FB.db,'users',user.uid), profile, {merge:true});
-    APP.profile=profile;
-    updateAuthDoneUI();
-    showAuthStep('done');
-    if(player.mesh){
-      attachNametag(player.mesh, name);
-      applyNametagVisibility();
-    }
+    const timeoutPromise=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Firestore timeout (8s)')),8000));
+    await Promise.race([
+      FB.setDoc(FB.doc(FB.db,'users',user.uid), {
+        uid:user.uid,
+        username:name,
+        email:user.email || '',
+        photoURL:user.photoURL || '',
+        createdAt:FB.serverTimestamp()
+      }, {merge:true}),
+      timeoutPromise
+    ]);
+    console.log('[Auth] profile saved to Firestore');
   }catch(e){
-    console.error(e);
-    showAuthError('保存失敗: '+e.message);
+    console.warn('[Auth] Firestore save failed (continuing):', e.code || '', e.message);
+  }
+
+  updateAuthDoneUI();
+  showAuthStep('done');
+  if(player.mesh){
+    attachNametag(player.mesh, name);
+    applyNametagVisibility();
   }
 });
 
 document.getElementById('btn-enter-lobby').addEventListener('click', ()=>{
+  clearAuthError();
   authScreen.classList.add('hidden');
   document.getElementById('title-screen').classList.remove('hidden');
+  document.getElementById('title-screen').classList.add('flex');
   gameState.screen='title';
 });
 
@@ -966,7 +1024,10 @@ document.getElementById('btn-change-name').addEventListener('click', ()=>{
 });
 
 document.getElementById('btn-logout').addEventListener('click', async ()=>{
-  await window.FB.signOut(window.FB.auth);
+  try{
+    await window.FB.signOut(window.FB.auth);
+  }catch(e){}
+  localStorage.removeItem('dggm_username');
   location.reload();
 });
 
@@ -987,7 +1048,6 @@ function build3DWorld(mode,isPhSeeker){
 
   colliders=[];propsList=[];jumpPads=[];boostPads=[];
   coinsList=[];seekersList=[];runnersList=[];propHiders=[];fxList=[];
-  // リモートメッシュも破棄
   Object.values(remotePlayers).forEach(rp=>{
     if(rp.mesh)worldGroup.remove(rp.mesh);
   });
@@ -1499,6 +1559,7 @@ function startGame(mode){
   applyNametagVisibility();
 
   document.getElementById('title-screen').classList.add('hidden');
+  document.getElementById('title-screen').classList.remove('flex');
   document.getElementById('result-screen').classList.add('hidden');
   document.getElementById('hud-top').classList.remove('hidden');
   document.getElementById('controls-overlay').classList.remove('hidden');
@@ -1694,20 +1755,15 @@ function createAIRunner(x,z,idx){
 }
 
 // ==========================================
-// ネームタグ可視性（かくれんぼ隠れる側は非表示）
+// ネームタグ可視性
 // ==========================================
 function applyNametagVisibility(){
-  // 自分
   if(player.mesh && player.mesh.userData.nametag){
     let visible=true;
     if(gameState.mode==='fps') visible=false;
-    if(gameState.mode==='prophunt'){
-      // 隠れる側: 常に非表示 / 鬼側: 自分のタグは表示（任意）
-      if(gameState.phRole==='hider') visible=false;
-    }
+    if(gameState.mode==='prophunt'&&gameState.phRole==='hider') visible=false;
     player.mesh.userData.nametag.visible=visible;
   }
-  // AI runner（鬼ごっこ用）は鬼ごっこモードで表示
   runnersList.forEach(r=>{
     if(r.mesh?.userData.nametag){
       r.mesh.userData.nametag.visible=(gameState.mode!=='prophunt');
@@ -1716,13 +1772,11 @@ function applyNametagVisibility(){
   seekersList.forEach(s=>{
     if(s.mesh?.userData.nametag) s.mesh.userData.nametag.visible=true;
   });
-  // リモートプレイヤー
   Object.values(remotePlayers).forEach(rp=>{
     if(rp.mesh?.userData.nametag){
       let vis=true;
       if(gameState.mode==='fps') vis=false;
       if(gameState.mode==='prophunt'){
-        // かくれんぼ: 隠れる側（変身中 or hider想定）は非表示
         if(rp.disguise) vis=false;
         else if(rp.mode==='prophunt') vis=false;
       }
@@ -2038,80 +2092,82 @@ function resolveHorizontalCollisions(pos,radius,currentY){
 // ==========================================
 let publishTimer=null;
 let unsubscribeRoom=null;
+let fbErrorShown=false;
 
 function startPublishing(){
   stopPublishing();
-  if(!APP.profile?.uid)return;
+  if(!APP.profile?.uid||!window.FB)return;
   const FB=window.FB;
   const myRef=FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players/${APP.profile.uid}`);
-  FB.onDisconnect(myRef).remove();
+  try{
+    FB.onDisconnect(myRef).remove();
+  }catch(e){}
 
-  // 10Hz送信
   publishTimer=setInterval(()=>{
     if(!APP.profile?.uid||gameState.screen!=='playing')return;
-    FB.rtSet(myRef,{
-      x:+player.pos.x.toFixed(2),
-      y:+player.pos.y.toFixed(2),
-      z:+player.pos.z.toFixed(2),
-      ry:+player.rotY.toFixed(2),
-      username:APP.profile.username,
-      photoURL:APP.profile.photoURL || '',
-      disguise:player.disguise?.id ?? null,
-      locked:!!player.locked,
-      mode:gameState.mode,
-      role:gameState.mode==='tag'?gameState.tagRole:(gameState.mode==='prophunt'?gameState.phRole:'player'),
-      updatedAt:Date.now()
-    }).catch(()=>{});
+    try{
+      FB.rtSet(myRef,{
+        x:+player.pos.x.toFixed(2),
+        y:+player.pos.y.toFixed(2),
+        z:+player.pos.z.toFixed(2),
+        ry:+player.rotY.toFixed(2),
+        username:APP.profile.username,
+        photoURL:APP.profile.photoURL || '',
+        disguise:player.disguise?.id ?? null,
+        locked:!!player.locked,
+        mode:gameState.mode,
+        role:gameState.mode==='tag'?gameState.tagRole:(gameState.mode==='prophunt'?gameState.phRole:'player'),
+        updatedAt:Date.now()
+      }).catch((e)=>{
+        if(!fbErrorShown){console.warn('[RTDB] publish failed:',e.message);fbErrorShown=true;}
+      });
+    }catch(e){}
   },100);
 
-  // 購読
-  const playersRef=FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players`);
-  unsubscribeRoom=FB.onValue(playersRef,(snap)=>{
-    const data=snap.val()||{};
-    // 削除されたリモートプレイヤーを消す
-    Object.keys(remotePlayers).forEach(uid=>{
-      if(!data[uid]){
-        const rp=remotePlayers[uid];
-        if(rp.mesh)worldGroup.remove(rp.mesh);
-        delete remotePlayers[uid];
-      }
-    });
-    // 追加/更新
-    Object.entries(data).forEach(([uid,p])=>{
-      if(uid===APP.profile?.uid)return;
-      if(gameState.screen!=='playing')return;
-      // 他モードは非表示
-      if(p.mode!==gameState.mode)return;
+  try{
+    const playersRef=FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players`);
+    unsubscribeRoom=FB.onValue(playersRef,(snap)=>{
+      const data=snap.val()||{};
+      Object.keys(remotePlayers).forEach(uid=>{
+        if(!data[uid]){
+          const rp=remotePlayers[uid];
+          if(rp.mesh)worldGroup.remove(rp.mesh);
+          delete remotePlayers[uid];
+        }
+      });
+      Object.entries(data).forEach(([uid,p])=>{
+        if(uid===APP.profile?.uid)return;
+        if(gameState.screen!=='playing')return;
+        if(p.mode!==gameState.mode)return;
 
-      let rp=remotePlayers[uid];
-      if(!rp){
-        const mesh=createCharacterMesh(0x38bdf8,false);
-        worldGroup.add(mesh);
-        rp={mesh,uid,targetPos:new THREE.Vector3(p.x,p.y,p.z),lastMode:p.mode,disguise:null};
-        remotePlayers[uid]=rp;
-        if(p.username)attachNametag(mesh, p.username);
-      }
-      rp.targetPos.set(p.x,p.y,p.z);
-      rp.disguise=p.disguise;
-      rp.mode=p.mode;
-      rp.role=p.role;
-      rp.username=p.username;
-      // 変身中ならプロップメッシュに置き換え（簡易）
-      if(p.disguise && !rp.disguiseMesh){
-        const dm=createProp3DMesh(p.disguise);
-        dm.position.copy(rp.mesh.position);
-        worldGroup.add(dm);
-        rp.mesh.visible=false;
-        rp.disguiseMesh=dm;
-      } else if(!p.disguise && rp.disguiseMesh){
-        worldGroup.remove(rp.disguiseMesh);
-        rp.disguiseMesh=null;
-        rp.mesh.visible=true;
-      }
-      // ネームタグ可視性を再評価
-      applyNametagVisibility();
+        let rp=remotePlayers[uid];
+        if(!rp){
+          const mesh=createCharacterMesh(0x38bdf8,false);
+          worldGroup.add(mesh);
+          rp={mesh,uid,targetPos:new THREE.Vector3(p.x,p.y,p.z),lastMode:p.mode,disguise:null};
+          remotePlayers[uid]=rp;
+          if(p.username)attachNametag(mesh, p.username);
+        }
+        rp.targetPos.set(p.x,p.y,p.z);
+        rp.disguise=p.disguise;
+        rp.mode=p.mode;
+        rp.role=p.role;
+        rp.username=p.username;
+        if(p.disguise && !rp.disguiseMesh){
+          const dm=createProp3DMesh(p.disguise);
+          dm.position.copy(rp.mesh.position);
+          worldGroup.add(dm);
+          rp.mesh.visible=false;
+          rp.disguiseMesh=dm;
+        } else if(!p.disguise && rp.disguiseMesh){
+          worldGroup.remove(rp.disguiseMesh);
+          rp.disguiseMesh=null;
+          rp.mesh.visible=true;
+        }
+        applyNametagVisibility();
+      });
     });
-  });
+  }catch(e){console.warn('[RTDB] subscribe failed:',e);}
 }
 
 function stopPublishing(){
@@ -2119,17 +2175,17 @@ function stopPublishing(){
   if(unsubscribeRoom){try{unsubscribeRoom();}catch(e){};unsubscribeRoom=null;}
   if(APP.profile?.uid && window.FB){
     const FB=window.FB;
-    FB.rtRemove(FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players/${APP.profile.uid}`)).catch(()=>{});
+    try{
+      FB.rtRemove(FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players/${APP.profile.uid}`)).catch(()=>{});
+    }catch(e){}
   }
 }
 
 function updateRemotePlayers(dt){
   Object.values(remotePlayers).forEach(rp=>{
     if(!rp.mesh)return;
-    // 補間
     rp.mesh.position.lerp(rp.targetPos,Math.min(1,dt*10));
     if(rp.disguiseMesh)rp.disguiseMesh.position.copy(rp.mesh.position);
-    // 向き
     const dx=rp.targetPos.x-rp.mesh.position.x;
     const dz=rp.targetPos.z-rp.mesh.position.z;
     if(Math.hypot(dx,dz)>0.1)rp.mesh.rotation.y=Math.atan2(dx,dz);
@@ -2790,7 +2846,6 @@ renderer.domElement.addEventListener('touchend',e=>{
   }
 },{passive:true});
 
-// ジョイスティック
 const joyZone=document.getElementById('joystick-zone');
 const joyKnob=document.getElementById('joystick-knob');
 joyZone.addEventListener('touchstart',e=>{
@@ -2901,6 +2956,7 @@ document.getElementById('start-prophunt-btn').addEventListener('click',()=>start
 document.getElementById('btn-back-title').addEventListener('click',()=>{
   document.getElementById('result-screen').classList.add('hidden');
   document.getElementById('title-screen').classList.remove('hidden');
+  document.getElementById('title-screen').classList.add('flex');
   gameState.screen='title';
   stopPublishing();
 });
@@ -2923,6 +2979,7 @@ function endGame(win,quit=false){
   if(quit){
     rs.classList.add('hidden');
     document.getElementById('title-screen').classList.remove('hidden');
+    document.getElementById('title-screen').classList.add('flex');
     document.getElementById('hud-top').classList.add('hidden');
     document.getElementById('controls-overlay').classList.add('hidden');
     document.getElementById('reticle-container').classList.add('hidden');
