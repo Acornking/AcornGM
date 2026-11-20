@@ -9,6 +9,8 @@
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   body{font-family:'M PLUS Rounded 1c',sans-serif;background:#020617;color:#f8fafc;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;}
+  /* カーソル制御：playing中は非表示 */
+  body.cursor-hidden, body.cursor-hidden *{cursor:none !important;}
   .game-btn{transition:all .12s cubic-bezier(.4,0,.2,1);box-shadow:0 4px 0 rgba(0,0,0,.45);}
   .game-btn:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.45);}
   #joystick-zone{position:relative;width:116px;height:116px;border-radius:9999px;background:rgba(15,23,42,.45);border:2px solid rgba(255,255,255,.25);backdrop-filter:blur(6px);}
@@ -39,6 +41,14 @@
   .glow-sky{animation:pulse-glow-sky 2s infinite;}
   @keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
   .animate-float{animation:float 3s ease-in-out infinite;}
+  /* ポーズオーバーレイ */
+  #pause-overlay{position:fixed;inset:0;z-index:60;background:rgba(2,6,23,.92);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:1rem;}
+  #pause-overlay.show{display:flex;}
+  /* 中央クリックヒント */
+  #click-hint{position:fixed;inset:0;z-index:55;display:none;align-items:center;justify-content:center;background:rgba(2,6,23,.4);backdrop-filter:blur(2px);pointer-events:none;}
+  #click-hint.show{display:flex;}
+  #click-hint .box{pointer-events:none;animation:pulseHint 2s infinite;}
+  @keyframes pulseHint{0%,100%{transform:scale(1);opacity:.9;}50%{transform:scale(1.05);opacity:1;}}
 </style>
 </head>
 <body class="w-screen h-screen relative overflow-hidden bg-slate-950">
@@ -103,6 +113,7 @@
       </div>
     </div>
     <button id="btn-sound" class="game-btn bg-slate-800/90 hover:bg-slate-700 border border-slate-600 p-2.5 rounded-xl text-base">🔊</button>
+    <button id="btn-pause" class="game-btn hidden bg-slate-800/90 hover:bg-amber-700 border border-slate-600 px-3 py-2 rounded-xl text-xs font-bold text-slate-200">⏸ ポーズ</button>
     <button id="btn-quit" class="game-btn bg-slate-800/90 hover:bg-rose-900/80 border border-slate-600 px-3 py-2 rounded-xl text-xs font-bold text-slate-200">終了</button>
   </div>
 </div>
@@ -145,7 +156,28 @@
   </div>
 </div>
 
-<!-- ===== ログイン画面 ===== -->
+<!-- ポーズオーバーレイ -->
+<div id="pause-overlay">
+  <div class="bg-slate-900/95 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl">
+    <div class="text-4xl mb-3">⏸</div>
+    <h2 class="text-2xl font-black text-white mb-1">ポーズ中</h2>
+    <p class="text-xs text-slate-400 mb-6">ゲームは一時停止しています</p>
+    <button id="btn-resume" class="game-btn w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black mb-3">▶ 再開する</button>
+    <button id="btn-pause-lobby" class="game-btn w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-black mb-3">🏠 ロビーに戻る</button>
+    <p class="text-[10px] text-slate-500 mt-2">ESC キーで再開</p>
+  </div>
+</div>
+
+<!-- クリックで操作開始ヒント -->
+<div id="click-hint">
+  <div class="box px-8 py-5 rounded-2xl bg-slate-900/90 border-2 border-emerald-400/70 text-center shadow-2xl">
+    <div class="text-3xl mb-2">🖱️</div>
+    <div class="text-sm font-black text-emerald-300">画面をクリックして操作開始</div>
+    <div class="text-[10px] text-slate-400 mt-1">ESC キーでポーズ / マウスは自動的に隠れます</div>
+  </div>
+</div>
+
+<!-- ログイン画面 -->
 <div id="auth-screen" class="absolute inset-0 z-40 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
   <div class="max-w-md w-full bg-slate-900/95 border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-2xl my-auto text-center">
     <div class="text-5xl mb-3">🔐</div>
@@ -271,6 +303,7 @@
         <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-emerald-400 font-black block">変身/固定</span>E / F</div>
         <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-sky-400 font-black block">スキル/射撃</span>Shift / クリック</div>
       </div>
+      <div class="mt-2 text-[10px] text-slate-500 text-center">ESC キーでポーズ</div>
     </div>
   </div>
 </div>
@@ -296,8 +329,7 @@
 </div>
 
 <!-- ================================================
-     Firebase SDK (v13.4.0)
-     Firestoreの通信問題を解決するためLong-Polling強制
+     Firebase SDK (v13.4.0) - Long-Polling強制
 ================================================ -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
@@ -326,12 +358,9 @@
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
 
-  // ★ Long-Polling を強制してオフラインエラーを回避
   let db;
   try{
-    db = initializeFirestore(app, {
-      experimentalForceLongPolling: true
-    });
+    db = initializeFirestore(app, { experimentalForceLongPolling: true });
     console.log('[Firebase] Firestore initialized with long-polling');
   }catch(e){
     console.warn('[Firebase] initializeFirestore failed, fallback', e);
@@ -388,7 +417,7 @@ class SoundEngine {
     else if(mode==='tag'){tempo=210;notes=[261.63,329.63,392,523.25,392,329.63,293.66,392];}
     else{tempo=280;notes=[220,261.63,329.63,293.66,246.94,329.63,392,329.63];}
     this.bgmTimer=setInterval(()=>{
-      if(this.muted||gameState.screen!=='playing')return;
+      if(this.muted||gameState.screen!=='playing'||gameState.paused)return;
       const f=notes[this.bgmStep%notes.length];
       this.playTone(f,mode==='fps'?'square':(mode==='tag'?'triangle':'sine'),0.16,mode==='fps'?0.035:0.045);
       if(this.bgmStep%4===0)this.playTone(f*0.5,'sine',0.25,0.055);
@@ -820,6 +849,7 @@ const ARENA_HALF=60;
 const gameState={
   screen:'auth',mode:'fps',tagRole:'runner',phRole:'hider',fpsDiff:'easy',
   phase:'play',timer:60,score:0,hp:3,maxHp:3,invulnTimer:0,lastTime:0,
+  paused:false,
   stats:{morphCount:0,tauntCount:0,coinsCollected:0,tagsMade:0,targetsHit:0},
   fps:{targets:[],drones:[],orbs:[],combo:0,bestCombo:0,shots:0,hits:0,
        reloadTimer:0,magSize:12,ammo:12,fireCooldown:0,recoil:0,
@@ -853,6 +883,142 @@ let remotePlayers={};
 const keys={};
 const joystick={active:false,dx:0,dy:0,touchId:null};
 const raycaster=new THREE.Raycaster();
+
+// ==========================================
+// ポインターロック制御
+// ==========================================
+const canvasEl=renderer.domElement;
+
+function requestPointerLock(){
+  if(!document.pointerLockElement && gameState.screen==='playing' && !gameState.paused){
+    try{
+      const p=canvasEl.requestPointerLock();
+      if(p&&p.catch)p.catch(()=>{});
+    }catch(e){}
+  }
+}
+function exitPointerLock(){
+  if(document.pointerLockElement){
+    try{document.exitPointerLock();}catch(e){}
+  }
+}
+function isPointerLocked(){
+  return document.pointerLockElement===canvasEl;
+}
+
+function enterPlayingMode(){
+  document.body.classList.add('cursor-hidden');
+  requestPointerLock();
+  hideClickHint();
+}
+function leavePlayingMode(){
+  document.body.classList.remove('cursor-hidden');
+  exitPointerLock();
+  hideClickHint();
+}
+
+const clickHintEl=document.getElementById('click-hint');
+function showClickHint(){
+  if(gameState.screen==='playing'&&!gameState.paused&&!isPointerLocked()){
+    clickHintEl.classList.add('show');
+  }
+}
+function hideClickHint(){
+  clickHintEl.classList.remove('show');
+}
+
+// キャンバスクリック → ポインターロック再取得
+canvasEl.addEventListener('click',()=>{
+  if(gameState.screen==='playing'&&!gameState.paused&&!isPointerLocked()){
+    requestPointerLock();
+  }
+  if(gameState.mode==='fps'&&gameState.screen==='playing'&&!gameState.paused)shootFPS();
+});
+
+// ポインターロック状態変更を監視
+document.addEventListener('pointerlockchange',()=>{
+  if(isPointerLocked()){
+    hideClickHint();
+    document.body.classList.add('cursor-hidden');
+  } else {
+    // ロック解除された
+    if(gameState.screen==='playing'&&!gameState.paused){
+      showClickHint();
+      document.body.classList.remove('cursor-hidden');
+    }
+  }
+});
+document.addEventListener('pointerlockerror',()=>{
+  console.warn('[PointerLock] error');
+});
+
+// マウス移動（ポインターロック中のみ有効）
+document.addEventListener('mousemove',(e)=>{
+  if(gameState.screen!=='playing'||gameState.paused)return;
+  if(!isPointerLocked())return;
+  const dx=e.movementX||0;
+  const dy=e.movementY||0;
+  if(gameState.mode==='fps'){
+    player.fpsYaw-=dx*0.0022;
+    player.fpsPitch=Math.max(-1.35,Math.min(1.35,player.fpsPitch-dy*0.0022));
+  } else {
+    camCtrl.yaw-=dx*0.004;
+    camCtrl.pitch=Math.max(-0.2,Math.min(1.3,camCtrl.pitch+dy*0.004));
+  }
+});
+
+// ==========================================
+// ポーズ制御
+// ==========================================
+const pauseOverlay=document.getElementById('pause-overlay');
+
+function pauseGame(){
+  if(gameState.screen!=='playing'||gameState.paused)return;
+  gameState.paused=true;
+  leavePlayingMode();
+  sound.stopBGM();
+  pauseOverlay.classList.add('show');
+  document.getElementById('btn-pause').classList.add('hidden');
+}
+function resumeGame(){
+  if(!gameState.paused)return;
+  gameState.paused=false;
+  pauseOverlay.classList.remove('show');
+  document.getElementById('btn-pause').classList.remove('hidden');
+  enterPlayingMode();
+  sound.startBGM(gameState.mode);
+  gameState.lastTime=performance.now();
+  if(window.FB && APP.profile){
+    try{
+      FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players/${APP.profile.uid}`);
+    }catch(e){}
+  }
+}
+
+document.getElementById('btn-pause').addEventListener('click',()=>{
+  if(gameState.screen==='playing')pauseGame();
+});
+document.getElementById('btn-resume').addEventListener('click',()=>{
+  resumeGame();
+});
+document.getElementById('btn-pause-lobby').addEventListener('click',()=>{
+  pauseOverlay.classList.remove('show');
+  gameState.paused=false;
+  document.getElementById('btn-pause').classList.add('hidden');
+  endGame(false,true);
+});
+
+// ESCキー → ポーズ
+window.addEventListener('keydown',(e)=>{
+  if(e.code==='Escape'){
+    if(gameState.screen==='playing'){
+      e.preventDefault();
+      if(gameState.paused)resumeGame();
+      else pauseGame();
+      return;
+    }
+  }
+});
 
 // ==========================================
 // 認証UI
@@ -899,11 +1065,9 @@ function initAuthListener(){
       showAuthStep('login');
       return;
     }
-
     document.getElementById('auth-avatar').src=user.photoURL || '';
     document.getElementById('auth-email').textContent=user.email || '';
 
-    // Firestore取得を試みる（タイムアウト付き・失敗時フォールバック）
     let profileLoaded=false;
     try{
       const timeoutPromise=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Firestore timeout (8s)')),8000));
@@ -922,12 +1086,9 @@ function initAuthListener(){
     }catch(e){
       console.warn('[Auth] Firestore getDoc failed:', e.code || '', e.message);
     }
-
     if(!profileLoaded){
-      // 新規 or Firestore取得失敗 → 名前設定画面へ
       showAuthStep('name');
       authScreen.classList.remove('hidden');
-      // ローカルに一時保存済みの名前があれば復元
       const savedName=localStorage.getItem('dggm_username');
       if(savedName) document.getElementById('input-username').value=savedName;
       console.log('[Auth] new/fallback → name step');
@@ -974,7 +1135,6 @@ document.getElementById('btn-save-name').addEventListener('click', async ()=>{
   const user=APP.user;
   if(!user){showAuthError('ログイン状態が失われました。再度ログインしてください');return;}
 
-  // まずローカル確定
   APP.profile={
     uid:user.uid,
     username:name,
@@ -983,7 +1143,6 @@ document.getElementById('btn-save-name').addEventListener('click', async ()=>{
   };
   localStorage.setItem('dggm_username',name);
 
-  // Firestore保存を試みる（失敗しても続行）
   try{
     const FB=window.FB;
     const timeoutPromise=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Firestore timeout (8s)')),8000));
@@ -1016,6 +1175,7 @@ document.getElementById('btn-enter-lobby').addEventListener('click', ()=>{
   document.getElementById('title-screen').classList.remove('hidden');
   document.getElementById('title-screen').classList.add('flex');
   gameState.screen='title';
+  leavePlayingMode();
 });
 
 document.getElementById('btn-change-name').addEventListener('click', ()=>{
@@ -1527,6 +1687,7 @@ function startGame(mode){
   sound.init();
   gameState.mode=mode;
   gameState.screen='playing';
+  gameState.paused=false;
   gameState.score=0;
   gameState.hp=3;
   gameState.invulnTimer=0;
@@ -1566,6 +1727,7 @@ function startGame(mode){
   document.getElementById('fps-crosshair').style.display='none';
   document.getElementById('fps-hud').style.display='none';
   document.getElementById('reticle-container').classList.remove('hidden');
+  document.getElementById('btn-pause').classList.remove('hidden');
 
   const modeBadge=document.getElementById('hud-mode-badge');
   const phActions=document.getElementById('prophunt-runner-actions');
@@ -1645,6 +1807,7 @@ function startGame(mode){
   sound.startBGM(mode);
   gameState.lastTime=performance.now();
   startPublishing();
+  enterPlayingMode();
 }
 
 function rebuildPlayerMesh(isSeeker){
@@ -1789,7 +1952,8 @@ function applyNametagVisibility(){
 // アクション
 // ==========================================
 function triggerMorph(){
-  if(gameState.screen!=='playing'||gameState.mode!=='prophunt'||gameState.phRole!=='hider')return;
+  if(gameState.screen!=='playing'||gameState.paused)return;
+  if(gameState.mode!=='prophunt'||gameState.phRole!=='hider')return;
   if(player.targetedProp){
     const def=player.targetedProp.def;
     player.disguise=def;
@@ -1816,7 +1980,8 @@ function triggerMorph(){
 }
 
 function triggerLock(){
-  if(gameState.screen!=='playing'||gameState.mode!=='prophunt'||gameState.phRole!=='hider')return;
+  if(gameState.screen!=='playing'||gameState.paused)return;
+  if(gameState.mode!=='prophunt'||gameState.phRole!=='hider')return;
   if(!player.disguise){pushToast('先にモノへ変身しよう！','text-amber-300');return;}
   player.locked=!player.locked;
   if(player.locked){
@@ -1831,7 +1996,8 @@ function triggerLock(){
 }
 
 function triggerJump(){
-  if(gameState.screen!=='playing'||gameState.mode==='fps')return;
+  if(gameState.screen!=='playing'||gameState.paused)return;
+  if(gameState.mode==='fps')return;
   if(player.locked){player.locked=false;updateLockHUD();}
   if(player.onGround){
     player.vel.y=player.jumpForce;
@@ -1841,7 +2007,7 @@ function triggerJump(){
 }
 
 function triggerSkill(){
-  if(gameState.screen!=='playing')return;
+  if(gameState.screen!=='playing'||gameState.paused)return;
   if(gameState.mode==='fps'){
     if(gameState.fps.reloadTimer<=0&&gameState.fps.ammo<gameState.fps.magSize){
       gameState.fps.reloadTimer=1.2;
@@ -1905,7 +2071,8 @@ function fireInvestigationBeam(){
 }
 
 function triggerTaunt(){
-  if(gameState.screen!=='playing'||gameState.mode!=='prophunt'||gameState.phRole!=='hider')return;
+  if(gameState.screen!=='playing'||gameState.paused)return;
+  if(gameState.mode!=='prophunt'||gameState.phRole!=='hider')return;
   if(gameState.phase!=='seek'){pushToast('鬼が来てから使おう！','text-amber-300');return;}
   if(player.tauntCooldown>0)return;
   player.tauntCooldown=5.0;
@@ -1928,7 +2095,7 @@ function triggerTaunt(){
 // FPS射撃
 // ==========================================
 function shootFPS(){
-  if(gameState.mode!=='fps'||gameState.screen!=='playing')return;
+  if(gameState.mode!=='fps'||gameState.screen!=='playing'||gameState.paused)return;
   if(gameState.fps.fireCooldown>0||gameState.fps.reloadTimer>0)return;
   if(gameState.fps.ammo<=0){triggerSkill();return;}
   gameState.fps.ammo--;
@@ -2088,7 +2255,7 @@ function resolveHorizontalCollisions(pos,radius,currentY){
 }
 
 // ==========================================
-// Realtime DB publish/subscribe
+// Realtime DB
 // ==========================================
 let publishTimer=null;
 let unsubscribeRoom=null;
@@ -2099,9 +2266,7 @@ function startPublishing(){
   if(!APP.profile?.uid||!window.FB)return;
   const FB=window.FB;
   const myRef=FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players/${APP.profile.uid}`);
-  try{
-    FB.onDisconnect(myRef).remove();
-  }catch(e){}
+  try{FB.onDisconnect(myRef).remove();}catch(e){}
 
   publishTimer=setInterval(()=>{
     if(!APP.profile?.uid||gameState.screen!=='playing')return;
@@ -2197,6 +2362,8 @@ function updateRemotePlayers(dt){
 // ==========================================
 function update(dt){
   if(gameState.screen!=='playing')return;
+  if(gameState.paused)return;
+
   gameState.timer-=dt;
   if(gameState.invulnTimer>0)gameState.invulnTimer-=dt;
   if(player.skillCooldown>0)player.skillCooldown=Math.max(0,player.skillCooldown-dt);
@@ -2774,11 +2941,11 @@ function updateTPSCamera(dt){
 }
 
 // ==========================================
-// 入力
+// 入力（キーボード）
 // ==========================================
 window.addEventListener('keydown',e=>{
   keys[e.code]=true;
-  if(gameState.screen!=='playing')return;
+  if(gameState.screen!=='playing'||gameState.paused)return;
   if(e.code==='Space'){e.preventDefault();triggerJump();}
   if(e.code==='KeyE'){e.preventDefault();triggerMorph();}
   if(e.code==='KeyF'){e.preventDefault();triggerLock();}
@@ -2787,32 +2954,9 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>{keys[e.code]=false;});
 
-let mouseDown=false;
-renderer.domElement.addEventListener('mousedown',e=>{
-  if(gameState.screen!=='playing')return;
-  mouseDown=true;camCtrl.lastX=e.clientX;camCtrl.lastY=e.clientY;
-});
-window.addEventListener('mousemove',e=>{
-  if(!mouseDown||gameState.screen!=='playing')return;
-  const dx=e.clientX-camCtrl.lastX;
-  const dy=e.clientY-camCtrl.lastY;
-  camCtrl.lastX=e.clientX;camCtrl.lastY=e.clientY;
-  if(gameState.mode==='fps'){
-    player.fpsYaw-=dx*0.003;
-    player.fpsPitch=Math.max(-1.3,Math.min(1.3,player.fpsPitch-dy*0.003));
-  } else {
-    camCtrl.yaw-=dx*0.006;
-    camCtrl.pitch=Math.max(-0.2,Math.min(1.3,camCtrl.pitch+dy*0.006));
-  }
-});
-window.addEventListener('mouseup',()=>{mouseDown=false;});
-renderer.domElement.addEventListener('click',e=>{
-  if(gameState.screen!=='playing')return;
-  if(gameState.mode==='fps')shootFPS();
-});
-
+// タッチ操作（カメラ）
 renderer.domElement.addEventListener('touchstart',e=>{
-  if(gameState.screen!=='playing')return;
+  if(gameState.screen!=='playing'||gameState.paused)return;
   for(const t of e.changedTouches){
     if(t.clientX>window.innerWidth*0.35){
       camCtrl.isDragging=true;
@@ -2822,7 +2966,7 @@ renderer.domElement.addEventListener('touchstart',e=>{
   }
 },{passive:true});
 renderer.domElement.addEventListener('touchmove',e=>{
-  if(gameState.screen!=='playing')return;
+  if(gameState.screen!=='playing'||gameState.paused)return;
   for(const t of e.changedTouches){
     if(t.identifier===camCtrl.touchId){
       const dx=t.clientX-camCtrl.lastX;
@@ -2959,6 +3103,7 @@ document.getElementById('btn-back-title').addEventListener('click',()=>{
   document.getElementById('title-screen').classList.add('flex');
   gameState.screen='title';
   stopPublishing();
+  leavePlayingMode();
 });
 document.getElementById('btn-replay').addEventListener('click',()=>{
   document.getElementById('result-screen').classList.add('hidden');
@@ -2971,8 +3116,13 @@ document.getElementById('btn-replay').addEventListener('click',()=>{
 function endGame(win,quit=false){
   if(gameState.screen!=='playing')return;
   gameState.screen='result';
+  gameState.paused=false;
   sound.stopBGM();
   stopPublishing();
+  leavePlayingMode();
+  pauseOverlay.classList.remove('show');
+  document.getElementById('btn-pause').classList.add('hidden');
+
   if(win)sound.playWin();else if(!quit)sound.playLose();
 
   const rs=document.getElementById('result-screen');
