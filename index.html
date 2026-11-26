@@ -1,2063 +1,1826 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>3D Acorn GM</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap" rel="stylesheet">
-<style>
-  body{font-family:'M PLUS Rounded 1c',sans-serif;background:#020617;color:#f8fafc;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;}
-  body.cursor-hidden, body.cursor-hidden *{cursor:none !important;}
-  .game-btn{transition:all .12s cubic-bezier(.4,0,.2,1);box-shadow:0 4px 0 rgba(0,0,0,.45);}
-  .game-btn:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.45);}
-  #joystick-zone{position:relative;width:116px;height:116px;border-radius:9999px;background:rgba(15,23,42,.45);border:2px solid rgba(255,255,255,.25);backdrop-filter:blur(6px);}
-  #joystick-knob{position:absolute;width:46px;height:46px;border-radius:9999px;background:radial-gradient(circle at 30% 30%,#fff,#cbd5e1);box-shadow:0 4px 12px rgba(0,0,0,.55);top:33px;left:33px;pointer-events:none;}
-  #canvas-container canvas{display:block;width:100%;height:100%;}
-  #fps-crosshair{position:absolute;left:50%;top:50%;width:28px;height:28px;transform:translate(-50%,-50%);pointer-events:none;z-index:12;}
-  #fps-crosshair::before,#fps-crosshair::after{content:'';position:absolute;background:rgba(255,255,255,.92);box-shadow:0 0 4px rgba(0,0,0,.9);}
-  #fps-crosshair::before{left:50%;top:0;width:2px;height:100%;transform:translateX(-50%);}
-  #fps-crosshair::after{top:50%;left:0;height:2px;width:100%;transform:translateY(-50%);}
-  #fps-crosshair .hit-marker{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%) rotate(45deg);border:2px solid #f43f5e;border-radius:2px;opacity:0;transition:opacity .1s;}
-  #fps-crosshair.hit .hit-marker{opacity:1;}
-  #fps-hud{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:15;pointer-events:none;display:none;flex-direction:column;align-items:center;gap:6px;}
-  #fps-hud .ammo{font-size:28px;font-weight:900;color:#fbbf24;text-shadow:0 2px 8px rgba(0,0,0,.9);}
-  #fps-hud .ammo small{font-size:13px;color:#94a3b8;}
-  #hit-vignette{position:absolute;inset:0;z-index:11;pointer-events:none;opacity:0;background:radial-gradient(circle,transparent 50%,rgba(244,63,94,.65) 100%);transition:opacity .15s;}
-  .mode-tab{transition:all .2s;border-bottom:3px solid transparent;}
-  .mode-tab.active{border-bottom-color:#fbbf24;color:#fbbf24;background:rgba(251,191,36,.08);}
-  .lobby-panel{display:none;}
-  .lobby-panel.active{display:block;}
-  @keyframes pulse-glow-red{0%,100%{box-shadow:0 0 15px rgba(244,63,94,.45);}50%{box-shadow:0 0 32px rgba(244,63,94,.85);}}
-  .glow-red{animation:pulse-glow-red 2s infinite;}
-  @keyframes pulse-glow-emerald{0%,100%{box-shadow:0 0 15px rgba(16,185,129,.45);}50%{box-shadow:0 0 32px rgba(16,185,129,.85);}}
-  .glow-emerald{animation:pulse-glow-emerald 2s infinite;}
-  @keyframes pulse-glow-sky{0%,100%{box-shadow:0 0 15px rgba(56,189,248,.45);}50%{box-shadow:0 0 32px rgba(56,189,248,.85);}}
-  .glow-sky{animation:pulse-glow-sky 2s infinite;}
-  @keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
-  .animate-float{animation:float 3s ease-in-out infinite;}
-  #pause-overlay{position:fixed;inset:0;z-index:60;background:rgba(2,6,23,.92);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:1rem;}
-  #pause-overlay.show{display:flex;}
-  #click-hint{position:fixed;inset:0;z-index:55;display:none;align-items:center;justify-content:center;background:rgba(2,6,23,.4);backdrop-filter:blur(2px);pointer-events:none;}
-  #click-hint.show{display:flex;}
-  #click-hint .box{pointer-events:none;animation:pulseHint 2s infinite;}
-  @keyframes pulseHint{0%,100%{transform:scale(1);opacity:.9;}50%{transform:scale(1.05);opacity:1;}}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>NEXUS ARENA 3D - Online FPS & Hide-and-Seek</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #090d16; font-family: 'Inter', 'Hiragino Sans', 'Yu Gothic UI', sans-serif; color: #f8fafc; }
+    #gameCanvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 1; }
+
+    /* ESCポーズ時でも背景を絶対にぼかさない（backdrop-filter不使用） */
+    .overlay-transparent {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      background: rgba(9, 13, 22, 0.42);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .lobby-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: radial-gradient(circle at center, rgba(15, 23, 42, 0.86) 0%, rgba(2, 6, 23, 0.96) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .crosshair {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 22px;
+      height: 22px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 15;
+    }
+    .crosshair::before, .crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(56, 189, 248, 0.92);
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+    }
+    .crosshair::before { top: 10px; left: 0; width: 22px; height: 2px; }
+    .crosshair::after { left: 10px; top: 0; width: 2px; height: 22px; }
+    .hitmarker {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 28px;
+      height: 28px;
+      transform: translate(-50%, -50%) rotate(45deg);
+      pointer-events: none;
+      z-index: 16;
+      opacity: 0;
+      transition: opacity 0.08s ease-out;
+    }
+    .hitmarker.active { opacity: 1; }
+    .hitmarker::before, .hitmarker::after {
+      content: '';
+      position: absolute;
+      background: #ef4444;
+    }
+    .hitmarker::before { top: 13px; left: 0; width: 28px; height: 2px; }
+    .hitmarker::after { left: 13px; top: 0; width: 2px; height: 28px; }
+
+    .damage-vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 12;
+      box-shadow: inset 0 0 90px rgba(239, 68, 68, 0);
+      transition: box-shadow 0.15s ease-out;
+    }
+    .damage-vignette.flash {
+      box-shadow: inset 0 0 110px rgba(239, 68, 68, 0.72);
+    }
+  </style>
 </head>
-<body class="w-screen h-screen relative overflow-hidden bg-slate-950">
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="damageVignette" class="damage-vignette"></div>
+  <div id="crosshair" class="crosshair hidden"></div>
+  <div id="hitmarker" class="hitmarker"></div>
 
-<div id="canvas-container" class="absolute inset-0 z-0"></div>
+  <!-- トースト通知 -->
+  <div id="toastBox" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-full bg-slate-900/90 border border-sky-500/50 text-sky-200 text-sm font-bold shadow-lg opacity-0 pointer-events-none transition-opacity duration-200"></div>
 
-<div id="danger-vignette" class="pointer-events-none absolute inset-0 z-10 transition-opacity duration-200 opacity-0"
-     style="background: radial-gradient(circle, transparent 52%, rgba(225,29,72,.6) 100%);"></div>
-<div id="hit-vignette"></div>
-
-<!-- FPS クロスヘア & 下部HUD -->
-<div id="fps-crosshair" style="display:none;"><div class="hit-marker"></div></div>
-<div id="fps-hud">
-  <div id="fps-team-badge" class="px-3 py-1 rounded-full text-xs font-black bg-sky-600 text-white shadow-lg">🔵 BLUE TEAM</div>
-  <div class="ammo" id="fps-ammo">15 <small>/ ∞</small></div>
-</div>
-
-<!-- かくれんぼ照準 -->
-<div id="reticle-container" class="hidden pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
-  <div id="reticle-dot" class="w-3.5 h-3.5 rounded-full border-2 border-white/80 bg-white/20 shadow-[0_0_8px_rgba(0,0,0,.8)] transition-all duration-100"></div>
-  <div id="target-prompt" class="mt-4 px-3.5 py-1.5 rounded-xl bg-slate-950/85 backdrop-blur-md border border-emerald-400/80 text-emerald-300 text-xs font-black shadow-lg opacity-0 transition-opacity duration-150 flex items-center gap-1.5">
-    <span class="px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 text-[10px]">E</span>
-    <span id="target-prompt-text">木箱に変身する</span>
-  </div>
-</div>
-
-<!-- 上部HUD -->
-<div id="hud-top" class="hidden absolute top-0 left-0 right-0 z-20 p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-  <div class="flex items-center gap-2.5 bg-slate-900/80 backdrop-blur-md border border-slate-700/80 px-3.5 py-2 rounded-2xl shadow-lg pointer-events-auto">
-    <span id="hud-mode-badge" class="px-2.5 py-0.5 rounded-lg text-xs font-black bg-rose-500 text-white">3D 鬼ごっこ</span>
-    <div class="flex flex-col">
-      <span id="hud-phase-text" class="text-xs sm:text-sm font-black text-slate-100">逃走中！</span>
-      <span id="hud-role-sub" class="text-[11px] text-slate-400">オンライン接続中</span>
-    </div>
-  </div>
-
-  <!-- 中央スコア・タイマー -->
-  <div class="flex items-center gap-3 sm:gap-5 bg-slate-900/85 backdrop-blur-md border border-slate-700/80 px-4 sm:px-6 py-2 rounded-2xl shadow-xl">
-    <div id="hud-fps-teams" class="hidden items-center gap-3">
-      <div class="text-center">
-        <div class="text-[10px] font-black text-sky-400">🔵 BLUE</div>
-        <div id="hud-blue-score" class="text-xl sm:text-2xl font-black text-sky-300 tabular-nums">0</div>
+  <!-- プレイ中HUD -->
+  <div id="hudLayer" class="fixed inset-0 z-10 pointer-events-none hidden">
+    <!-- 上部ステータスバー -->
+    <div class="flex items-start justify-between p-4 gap-3">
+      <div class="bg-slate-950/75 border border-slate-700/80 rounded-xl px-4 py-2.5 shadow-lg">
+        <div class="flex items-center gap-2 text-xs text-slate-400 font-semibold">
+          <span id="hudModeBadge" class="px-2 py-0.5 rounded bg-sky-600 text-white font-bold">FPS DEATHMATCH</span>
+          <span id="hudRoomId" class="font-mono text-slate-300">SERVER: ---</span>
+        </div>
+        <div class="flex items-center gap-4 mt-1.5 text-xs">
+          <span class="text-emerald-400 font-bold">👤 オンライン: <span id="hudHumanCount">1</span>人</span>
+          <span class="text-amber-400 font-bold">🤖 BOT: <span id="hudBotCount">0</span>体</span>
+          <span id="hudHostBadge" class="hidden px-2 py-0.5 rounded bg-purple-600/80 text-white text-[10px] font-bold">HOST</span>
+        </div>
       </div>
-      <div class="text-xs font-black text-slate-500">VS</div>
-      <div class="text-center">
-        <div class="text-[10px] font-black text-rose-400">🔴 RED</div>
-        <div id="hud-red-score" class="text-xl sm:text-2xl font-black text-rose-300 tabular-nums">0</div>
-      </div>
-      <div class="h-7 w-[1px] bg-slate-700"></div>
-    </div>
 
-    <div class="text-center">
-      <div class="text-[10px] font-bold text-slate-400">残り時間</div>
-      <div id="hud-timer" class="text-xl sm:text-2xl font-black text-amber-400 tabular-nums">60.0</div>
-    </div>
-    <div class="h-7 w-[1px] bg-slate-700"></div>
-    <div class="text-center">
-      <div class="text-[10px] font-bold text-slate-400">スコア</div>
-      <div id="hud-score" class="text-xl sm:text-2xl font-black text-emerald-400 tabular-nums">0</div>
-    </div>
-    <div id="hud-hp-container" class="flex items-center gap-1 pl-2 border-l border-slate-700">
-      <div id="hud-hearts" class="flex gap-0.5 text-sm sm:text-base">❤️❤️❤️</div>
-    </div>
-    <div id="hud-fps-hp-box" class="hidden flex-col pl-2 border-l border-slate-700 w-24">
-      <div class="flex justify-between text-[10px] font-black">
-        <span class="text-slate-400">HP</span>
-        <span id="hud-fps-hp-text" class="text-emerald-400">100</span>
+      <!-- 試合タイマー（サーバー時刻同期・途中参加でも残り時間をそのまま共有） -->
+      <div class="bg-slate-950/85 border-2 border-sky-500/60 rounded-2xl px-6 py-2 text-center shadow-xl">
+        <div class="text-[10px] tracking-widest text-sky-400 font-bold uppercase">REMAINING TIME</div>
+        <div id="hudTimer" class="text-3xl font-black font-mono text-white tracking-wider">05:00</div>
+        <div id="hudRoleBanner" class="text-xs font-bold mt-0.5 text-amber-300"></div>
       </div>
-      <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden mt-0.5">
-        <div id="hud-fps-hp-bar" class="h-full bg-emerald-400 transition-all duration-150" style="width:100%"></div>
+
+      <!-- ミニスコアボード -->
+      <div class="bg-slate-950/75 border border-slate-700/80 rounded-xl px-3.5 py-2.5 w-60 shadow-lg">
+        <div class="text-[11px] font-bold text-slate-400 border-b border-slate-800 pb-1 mb-1.5 flex justify-between">
+          <span>PLAYERS (最大8枠/人間優先)</span>
+          <span>SCORE</span>
+        </div>
+        <div id="hudScoreList" class="space-y-1 text-xs max-h-40 overflow-hidden"></div>
       </div>
     </div>
-  </div>
 
-  <!-- 右上ユーザー・オンライン人数・操作 -->
-  <div class="flex items-center gap-2 pointer-events-auto">
-    <div class="hidden md:flex items-center gap-1.5 bg-slate-900/85 backdrop-blur-md border border-emerald-500/40 px-3 py-1.5 rounded-2xl shadow-lg">
-      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-      <span id="hud-online-count" class="text-xs font-black text-emerald-300">オンライン: 1人</span>
-    </div>
-    <div id="hud-disguise-box" class="hidden items-center gap-2 bg-slate-900/85 backdrop-blur-md border border-emerald-500/50 px-3 py-1.5 rounded-2xl shadow-lg">
-      <span id="hud-disguise-icon" class="text-xl">🏃</span>
-      <div class="hidden sm:block">
-        <div class="text-[10px] text-emerald-400 font-bold">現在の姿</div>
-        <div id="hud-disguise-name" class="text-xs font-black text-white">人間</div>
+    <!-- キルログ -->
+    <div id="killFeed" class="fixed top-28 right-4 flex flex-col items-end gap-1.5 text-xs font-bold"></div>
+
+    <!-- 下部体力・弾薬バー -->
+    <div class="fixed bottom-4 left-4 right-4 flex items-end justify-between gap-4">
+      <div class="bg-slate-950/80 border border-slate-700/80 rounded-2xl p-3.5 w-64 shadow-lg">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-xs font-bold text-slate-400">HP</span>
+          <span id="hudHpText" class="text-lg font-black text-emerald-400 font-mono">100 / 100</span>
+        </div>
+        <div class="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+          <div id="hudHpBar" class="h-full bg-gradient-to-r from-emerald-500 to-sky-400 transition-all duration-150" style="width: 100%;"></div>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-400 flex justify-between">
+          <span>WASD: 移動 / Space: ジャンプ</span>
+          <span>ESC: メニュー</span>
+        </div>
+      </div>
+
+      <div id="hudWeaponBox" class="bg-slate-950/80 border border-slate-700/80 rounded-2xl p-3.5 w-56 text-right shadow-lg">
+        <div id="hudWeaponName" class="text-xs font-bold text-sky-400">ASSAULT RIFLE</div>
+        <div class="text-2xl font-black font-mono text-white mt-0.5">
+          <span id="hudAmmo">30</span> <span class="text-sm text-slate-500">/ ∞</span>
+        </div>
+        <div id="hudReloadText" class="text-[11px] text-amber-400 font-bold h-4">左クリック: 射撃 / R: リロード</div>
       </div>
     </div>
-    <div id="hud-user-box" class="flex items-center gap-2 bg-slate-900/85 backdrop-blur-md border border-sky-500/50 px-3 py-1.5 rounded-2xl shadow-lg">
-      <img id="hud-user-avatar" class="w-6 h-6 rounded-full border border-sky-400/50 hidden" alt="">
-      <div>
-        <div class="text-[10px] text-sky-400 font-bold leading-none">プレイヤー</div>
-        <div id="hud-user-name" class="text-xs font-black text-white leading-tight">ゲスト</div>
+
+    <!-- モバイル用タッチ操作パッド -->
+    <div id="mobileControls" class="fixed bottom-24 left-4 right-4 flex justify-between items-end md:hidden pointer-events-auto">
+      <div class="grid grid-cols-3 gap-1.5 w-36 h-36">
+        <div></div>
+        <button id="btnTouchUp" class="bg-slate-800/75 border border-slate-600 rounded-xl flex items-center justify-center text-white font-bold active:bg-sky-600">▲</button>
+        <div></div>
+        <button id="btnTouchLeft" class="bg-slate-800/75 border border-slate-600 rounded-xl flex items-center justify-center text-white font-bold active:bg-sky-600">◀</button>
+        <button id="btnTouchJump" class="bg-slate-800/75 border border-slate-600 rounded-xl flex items-center justify-center text-xs text-sky-300 font-bold active:bg-sky-600">JUMP</button>
+        <button id="btnTouchRight" class="bg-slate-800/75 border border-slate-600 rounded-xl flex items-center justify-center text-white font-bold active:bg-sky-600">▶</button>
+        <div></div>
+        <button id="btnTouchDown" class="bg-slate-800/75 border border-slate-600 rounded-xl flex items-center justify-center text-white font-bold active:bg-sky-600">▼</button>
+        <div></div>
+      </div>
+      <div class="flex flex-col gap-2">
+        <button id="btnTouchReload" class="px-4 py-3 bg-amber-600/85 rounded-xl text-white font-bold text-xs shadow">RELOAD</button>
+        <button id="btnTouchFire" class="w-20 h-20 bg-rose-600/85 border-2 border-rose-300 rounded-full text-white font-black text-sm shadow-lg active:scale-95">FIRE</button>
       </div>
     </div>
-    <button id="btn-sound" class="game-btn bg-slate-800/90 hover:bg-slate-700 border border-slate-600 p-2.5 rounded-xl text-base">🔊</button>
-    <button id="btn-pause" class="game-btn hidden bg-slate-800/90 hover:bg-amber-700 border border-slate-600 px-3 py-2 rounded-xl text-xs font-bold text-slate-200">⏸ ポーズ</button>
-    <button id="btn-quit" class="game-btn bg-slate-800/90 hover:bg-rose-900/80 border border-slate-600 px-3 py-2 rounded-xl text-xs font-bold text-slate-200">終了</button>
   </div>
-</div>
 
-<!-- 中央バナー & トースト -->
-<div id="center-banner" class="pointer-events-none absolute top-20 left-1/2 -translate-x-1/2 z-20 transition-all duration-300 opacity-0 scale-90 w-[90%] max-w-md">
-  <div class="bg-slate-900/90 backdrop-blur-md border-2 border-amber-400/80 px-5 py-2.5 rounded-2xl shadow-2xl text-center">
-    <div id="banner-title" class="text-base sm:text-lg font-black text-amber-300">準備タイム！</div>
-    <div id="banner-sub" class="text-xs text-slate-200 font-bold mt-0.5">モノに照準を合わせて変身し、隠れよう！</div>
-  </div>
-</div>
-<div id="toast-feed" class="pointer-events-none absolute top-36 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1"></div>
-
-<!-- モバイル＆アクションコントロール -->
-<div id="controls-overlay" class="hidden absolute bottom-4 left-4 right-4 z-20 flex items-end justify-between pointer-events-none">
-  <div class="pointer-events-auto opacity-85 hover:opacity-100 transition-opacity">
-    <div id="joystick-zone"><div id="joystick-knob"></div></div>
-  </div>
-  <div class="flex flex-col items-end gap-2.5 pointer-events-auto">
-    <div id="prophunt-runner-actions" class="hidden flex items-center gap-2">
-      <button id="btn-taunt" class="game-btn flex flex-col items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-amber-600/90 hover:bg-amber-500 border-2 border-amber-300 text-white shadow-lg">
-        <span class="text-lg sm:text-xl">🎶</span><span class="text-[10px] font-black">口笛</span>
-      </button>
-      <button id="btn-lock" class="game-btn flex flex-col items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-indigo-600/90 hover:bg-indigo-500 border-2 border-indigo-300 text-white shadow-lg">
-        <span id="lock-icon" class="text-lg sm:text-xl">🔓</span><span id="lock-label" class="text-[10px] font-black">角度固定</span>
-      </button>
-      <button id="btn-morph" class="game-btn flex flex-col items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-emerald-600/90 hover:bg-emerald-500 border-2 border-emerald-300 text-white shadow-xl">
-        <span class="text-xl sm:text-2xl">✨</span><span class="text-[11px] font-black">変身</span>
-      </button>
-    </div>
-    <div class="flex items-center gap-2.5">
-      <button id="btn-shoot-mobile" class="hidden game-btn flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-rose-600/90 hover:bg-rose-500 border-2 border-rose-300 text-white shadow-xl">
-        <span class="text-xl">🔥</span><span class="text-[11px] font-black">射撃</span>
-      </button>
-      <button id="btn-jump" class="game-btn flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-teal-600/90 hover:bg-teal-500 border-2 border-teal-300 text-white shadow-xl">
-        <span class="text-xl sm:text-2xl">⬆️</span><span class="text-[11px] font-black">ジャンプ</span>
-      </button>
-      <button id="btn-skill" class="game-btn relative overflow-hidden flex flex-col items-center justify-center w-18 h-18 sm:w-20 sm:h-20 rounded-2xl bg-sky-600/90 hover:bg-sky-500 border-2 border-sky-300 text-white shadow-xl">
-        <div id="skill-cooldown-overlay" class="absolute inset-0 bg-slate-950/75 origin-bottom scale-y-0 transition-transform duration-75"></div>
-        <span id="skill-icon" class="text-2xl relative z-10">💨</span>
-        <span id="skill-label" class="text-xs font-black relative z-10">ダッシュ</span>
-      </button>
-    </div>
-  </div>
-</div>
-
-<!-- ポーズオーバーレイ -->
-<div id="pause-overlay">
-  <div class="bg-slate-900/95 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl">
-    <div class="text-4xl mb-3">⏸</div>
-    <h2 class="text-2xl font-black text-white mb-1">ポーズ中</h2>
-    <p class="text-xs text-slate-400 mb-6">ゲームは一時停止しています</p>
-    <button id="btn-resume" class="game-btn w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black mb-3">▶ 再開する</button>
-    <button id="btn-pause-lobby" class="game-btn w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-black mb-3">🏠 ロビーに戻る</button>
-    <p class="text-[10px] text-slate-500 mt-2">ESC キーで再開</p>
-  </div>
-</div>
-
-<!-- クリックで操作開始ヒント -->
-<div id="click-hint">
-  <div class="box px-8 py-5 rounded-2xl bg-slate-900/90 border-2 border-emerald-400/70 text-center shadow-2xl">
-    <div class="text-3xl mb-2">🖱️</div>
-    <div class="text-sm font-black text-emerald-300">画面をクリックして操作開始</div>
-    <div class="text-[10px] text-slate-400 mt-1">ESC キーでポーズ / マウスは自動的に隠れます</div>
-  </div>
-</div>
-
-<!-- ログイン画面（未設定・ログアウト時のみ表示） -->
-<div id="auth-screen" class="hidden absolute inset-0 z-40 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
-  <div class="max-w-md w-full bg-slate-900/95 border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-2xl my-auto text-center">
-    <div class="text-5xl mb-3">🌐</div>
-    <h1 class="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-amber-300 to-emerald-400 mb-2">オンライン参加設定</h1>
-    <p class="text-xs text-slate-400 mb-6">ページを更新してもログイン状態が維持されます。ログインなしでもすぐ遊べます。</p>
-
-    <div id="auth-step-login">
-      <button id="btn-google-login" class="game-btn w-full py-3.5 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-black text-base flex items-center justify-center gap-3 shadow-lg mb-3">
-        <svg class="w-5 h-5" viewBox="0 0 48 48">
-          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-        </svg>
-        Googleでログイン
-      </button>
-      <button id="btn-guest-login" class="game-btn w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-black text-sm">
-        🚀 ログインせずにオンライン参加
-      </button>
-      <div id="auth-error" class="text-xs text-rose-400 mt-3 hidden"></div>
-    </div>
-
-    <div id="auth-step-name" class="hidden">
-      <div class="mb-4">
-        <img id="auth-avatar" class="w-16 h-16 rounded-full mx-auto border-2 border-emerald-400/60 mb-2 hidden" alt="">
-        <div id="auth-email" class="text-sm font-black text-slate-200"></div>
+  <!-- ESCポーズメニュー（背景を絶対にぼかさない仕様） -->
+  <div id="pauseOverlay" class="overlay-transparent hidden">
+    <div class="bg-slate-900/95 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl text-center">
+      <h2 class="text-xl font-black text-white mb-1">メニュー（オンライン進行中）</h2>
+      <p class="text-xs text-slate-400 mb-5">オンライン対戦中のため、試合時間とワールドはリアルタイムで進行しています。</p>
+      <div class="space-y-3">
+        <button id="btnResumeGame" class="w-full py-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-sm transition cursor-pointer">
+          ゲームに戻る（画面をクリックで視点ロック）
+        </button>
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-left">
+          <div class="flex justify-between text-xs text-slate-300 mb-1">
+            <span>マウス感度</span>
+            <span id="sensValText" class="font-mono text-sky-400">1.0</span>
+          </div>
+          <input id="sensSlider" type="range" min="0.2" max="3.0" step="0.1" value="1.0" class="w-full accent-sky-500" />
+        </div>
+        <button id="btnLeaveMatch" class="w-full py-3 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white font-bold text-sm transition cursor-pointer">
+          サーバーから退出してロビーへ戻る
+        </button>
       </div>
-      <label class="block text-left text-xs font-bold text-slate-400 mb-1.5">ユーザーネーム（頭上にロブロックス風表示）</label>
-      <input id="input-username" type="text" maxlength="14" placeholder="例: Player_01"
-        class="w-full px-4 py-3 rounded-xl bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 outline-none text-center text-lg font-black text-white mb-2 transition-colors">
-      <div class="text-[11px] text-slate-500 mb-4">1〜14文字。リロードしても保存されます。</div>
-      <button id="btn-save-name" class="game-btn w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-base">ロビーへ進む</button>
     </div>
   </div>
-</div>
 
-<!-- ロビー画面 -->
-<div id="title-screen" class="hidden absolute inset-0 z-30 items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md overflow-y-auto">
-  <div class="max-w-3xl w-full bg-slate-900/92 border border-slate-700/80 rounded-3xl p-5 sm:p-7 shadow-2xl my-auto">
-    <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-800">
-      <div class="flex items-center gap-2">
-        <img id="lobby-avatar" class="w-8 h-8 rounded-full border border-emerald-400/60 hidden" alt="">
+  <!-- 試合終了リザルトオーバーレイ -->
+  <div id="resultOverlay" class="overlay-transparent hidden">
+    <div class="bg-slate-900/95 border-2 border-sky-500/70 rounded-2xl p-6 w-full max-w-lg shadow-2xl text-center">
+      <div class="text-xs font-bold text-sky-400 tracking-widest uppercase">MATCH FINISHED</div>
+      <h2 id="resultWinnerTitle" class="text-2xl font-black text-white mt-1 mb-4">試合終了！</h2>
+      <div id="resultScoreBoard" class="bg-slate-950/90 rounded-xl p-3 border border-slate-800 space-y-1.5 text-left text-sm mb-5 max-h-60 overflow-y-auto"></div>
+      <p class="text-xs text-slate-400 mb-4">まもなく次のオンラインマッチへ自動接続します...</p>
+      <button id="btnNextMatchNow" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm cursor-pointer">
+        すぐに次のサーバーへ参加する
+      </button>
+    </div>
+  </div>
+
+  <!-- ロビー画面（サーバー自動マッチング） -->
+  <div id="lobbyOverlay" class="lobby-backdrop">
+    <div class="bg-slate-900/95 border border-slate-700/90 rounded-3xl p-7 w-full max-w-xl shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
         <div>
-          <div class="text-[10px] text-emerald-400 font-bold">● オンライン接続準備完了</div>
-          <div id="lobby-username" class="text-sm font-black text-white">-</div>
+          <span class="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold">
+            ● REALTIME ONLINE SERVER
+          </span>
+          <h1 class="text-2xl sm:text-3xl font-black text-white mt-2 tracking-tight">NEXUS ARENA 3D</h1>
+        </div>
+        <div class="text-right text-xs text-slate-400">
+          <div>オンライン接続中</div>
+          <div id="lobbyOnlineUsers" class="text-sky-400 font-bold text-sm">待機中...</div>
         </div>
       </div>
-      <div class="flex items-center gap-2">
-        <span id="lobby-online-badge" class="text-xs px-2.5 py-1 rounded-lg bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 font-black">ロビー接続中</span>
-        <button id="btn-lobby-edit-name" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold">名前変更</button>
-        <button id="btn-lobby-logout" class="text-xs px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 font-bold">ログアウト</button>
-      </div>
-    </div>
 
-    <div class="text-center mb-4">
-      <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-xs font-bold text-amber-400 mb-2 animate-float">
-        <span>🌐 Firebase Realtime オンライン対戦</span><span>•</span><span>青赤チーム自動分けFPS</span>
-      </div>
-      <h1 class="text-2xl sm:text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-amber-300 to-emerald-400 drop-shadow">3D 鬼ごっこ＆変身かくれんぼ＋FPS</h1>
-    </div>
+      <p class="text-xs text-slate-300 leading-relaxed mb-5 bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
+        ・オンラインプレイヤーが少ない場合は<strong class="text-sky-300">全員が自動的に同じサーバーへ集約</strong>されます。<br />
+        ・常に<strong class="text-emerald-300">オンラインプレイヤーを最優先</strong>し、空き枠のみBOTが自動補充されます（人間が参加するとBOTは自動退出）。<br />
+        ・1試合5分間。途中参加でも<strong class="text-amber-300">サーバーの現在進行中の残り時間のまま</strong>即参戦できます。
+      </p>
 
-    <div class="flex gap-1 sm:gap-2 mb-4 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-700">
-      <button class="mode-tab active flex-1 py-2 rounded-xl text-xs sm:text-sm font-black text-slate-300" data-mode="fps">⚔️ チームFPS</button>
-      <button class="mode-tab flex-1 py-2 rounded-xl text-xs sm:text-sm font-black text-slate-300" data-mode="tag">👹 鬼ごっこ</button>
-      <button class="mode-tab flex-1 py-2 rounded-xl text-xs sm:text-sm font-black text-slate-300" data-mode="prophunt">🪴 かくれんぼ</button>
-    </div>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-400 mb-1.5">プレイヤー名</label>
+          <input id="playerNameInput" type="text" maxlength="16" placeholder="名前を入力..." class="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm font-bold focus:outline-none focus:border-sky-500" />
+        </div>
 
-    <!-- FPSパネル -->
-    <div class="lobby-panel active" data-panel="fps">
-      <div class="bg-slate-800/75 border-2 border-sky-500/40 rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-3xl">⚔️</span>
-          <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30">BLUE vs RED オンラインチーム戦</span>
+        <div>
+          <label class="block text-xs font-bold text-slate-400 mb-1.5">ゲームモード選択（同じモードの公開サーバーへ自動合流）</label>
+          <div class="grid grid-cols-2 gap-3">
+            <button type="button" id="modeFpsBtn" class="mode-select-btn active p-3.5 rounded-2xl border-2 border-sky-500 bg-sky-950/50 text-left transition cursor-pointer">
+              <div class="text-sm font-black text-white">🔫 オンライン FPS</div>
+              <div class="text-[11px] text-sky-300 mt-1">5分間のデスマッチ。壁貫通なしの本格弾道判定。</div>
+            </button>
+            <button type="button" id="modeHideBtn" class="mode-select-btn p-3.5 rounded-2xl border-2 border-slate-700 bg-slate-950/70 text-left transition cursor-pointer">
+              <div class="text-sm font-black text-white">🫣 3D かくれんぼ</div>
+              <div class="text-[11px] text-amber-300 mt-1">大量の障害物・迷路・高台がある専用マップで鬼ごっこ！</div>
+            </button>
+          </div>
         </div>
-        <h2 class="text-xl font-black text-white mb-1">FPS チームバトルモード</h2>
-        <p class="text-xs text-slate-300 leading-relaxed mb-3">
-          専用バトルアリーナで<strong class="text-sky-400">青チーム</strong>と<strong class="text-rose-400">赤チーム</strong>に分かれてリアルタイム銃撃戦！参加時の人数を見て<strong>自動で少ない方のチームに振り分け</strong>られます。
-        </p>
-        <div class="grid grid-cols-3 gap-2 mb-4 text-[10px] text-center">
-          <div class="bg-sky-900/40 border border-sky-500/40 rounded-lg py-1.5"><span class="block text-sky-300 font-black text-sm">⚖️ 自動チーム分け</span>青・赤を均等配属</div>
-          <div class="bg-amber-900/40 border border-amber-500/40 rounded-lg py-1.5"><span class="block text-amber-300 font-black text-sm">🏟️ 専用ステージ</span>高台・拠点・ジャンプ台</div>
-          <div class="bg-rose-900/40 border border-rose-500/40 rounded-lg py-1.5"><span class="block text-rose-300 font-black text-sm">🏷️ ロブロックス風名札</span>頭上に名前＋HPバー</div>
-        </div>
-        <button id="start-fps-btn" class="game-btn glow-sky w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-600 via-indigo-500 to-rose-500 hover:opacity-95 text-white font-black text-base">⚔️ 自動チーム分けでFPS参戦！</button>
-      </div>
-    </div>
 
-    <!-- 鬼ごっこパネル -->
-    <div class="lobby-panel" data-panel="tag">
-      <div class="bg-slate-800/75 border-2 border-rose-500/40 rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-3xl">👹</span>
-          <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30">3D オンライン追跡</span>
-        </div>
-        <h2 class="text-xl font-black text-white mb-1">3D 鬼ごっこモード</h2>
-        <p class="text-xs text-slate-300 leading-relaxed mb-4">120mの公園ステージでジャンプ台・加速パッドを駆使して逃げ切れ！他のオンラインプレイヤーもリアルタイムで表示されます。</p>
-        <div class="flex bg-slate-950/90 p-1 rounded-xl border border-slate-700 mb-3">
-          <button id="tag-role-runner" class="flex-1 py-1.5 rounded-lg text-xs font-black bg-sky-600 text-white">🏃 逃走者</button>
-          <button id="tag-role-seeker" class="flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400">👹 鬼</button>
-        </div>
-        <button id="start-tag-btn" class="game-btn glow-red w-full py-3 rounded-xl bg-gradient-to-r from-rose-600 to-orange-500 hover:from-rose-500 hover:to-orange-400 text-white font-black text-base">3D 鬼ごっこ開始！</button>
-      </div>
-    </div>
-
-    <!-- かくれんぼパネル -->
-    <div class="lobby-panel" data-panel="prophunt">
-      <div class="bg-slate-800/75 border-2 border-emerald-500/40 rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-3xl">🪴</span>
-          <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">3D オンライン擬態</span>
-        </div>
-        <h2 class="text-xl font-black text-white mb-1">3D 変身かくれんぼ</h2>
-        <p class="text-xs text-slate-300 leading-relaxed mb-4">木箱・鉢植え・ベンチ・コーン・どんぐり像に照準を合わせて<strong>3D変身</strong>！<strong>角度ロック[F]</strong>でカメラだけ回してやり過ごそう。</p>
-        <div class="flex bg-slate-950/90 p-1 rounded-xl border border-slate-700 mb-3">
-          <button id="ph-role-hider" class="flex-1 py-1.5 rounded-lg text-xs font-black bg-emerald-600 text-white">🪴 隠れる側</button>
-          <button id="ph-role-seeker" class="flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400">🔍 鬼側</button>
-        </div>
-        <button id="start-prophunt-btn" class="game-btn glow-emerald w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-base">3D かくれんぼ開始！</button>
-      </div>
-    </div>
-
-    <div class="bg-slate-950/75 border border-slate-800 rounded-2xl p-3.5 mt-4 text-xs text-slate-300">
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-amber-400 font-black block">移動/視点</span>WASD / マウス</div>
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-teal-400 font-black block">ジャンプ</span>Space</div>
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-emerald-400 font-black block">変身/固定</span>E / F</div>
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-sky-400 font-black block">射撃/リロード</span>クリック / R</div>
+        <button id="btnJoinOnlineServer" class="w-full py-4 rounded-2xl bg-gradient-to-r from-sky-600 to-emerald-600 hover:from-sky-500 hover:to-emerald-500 text-white font-black text-base shadow-lg transition cursor-pointer">
+          オンラインサーバーへ自動マッチング参加
+        </button>
       </div>
     </div>
   </div>
-</div>
 
-<!-- リザルト画面 -->
-<div id="result-screen" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-  <div class="max-w-md w-full bg-slate-900 border-2 border-slate-700 rounded-3xl p-6 sm:p-8 text-center shadow-2xl">
-    <div id="result-emoji" class="text-6xl mb-3">🏆</div>
-    <h2 id="result-title" class="text-2xl sm:text-3xl font-black text-white mb-1">勝利！</h2>
-    <p id="result-subtitle" class="text-xs sm:text-sm text-slate-400 mb-6">見事に3D空間を制覇しました！</p>
-    <div class="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 mb-6 space-y-2.5">
-      <div class="flex justify-between items-center text-sm">
-        <span class="text-slate-400 font-bold">個人スコア</span>
-        <span id="result-score" class="text-2xl font-black text-amber-400">1,500 pt</span>
-      </div>
-      <div class="h-[1px] bg-slate-800"></div>
-      <div id="result-stats" class="text-xs text-slate-300 space-y-1.5 text-left"></div>
-    </div>
-    <div class="flex gap-3">
-      <button id="btn-back-title" class="game-btn flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-black text-sm">ロビーへ</button>
-      <button id="btn-replay" class="game-btn flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-sm">もう一度遊ぶ！</button>
-    </div>
-  </div>
-</div>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, get, update, remove, push, onValue, onDisconnect, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-<!-- ================================================
-     Firebase Realtime Database SDK (v13.4.0)
-================================================ -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
-  import {
-    getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut
-  } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
-  import {
-    getDatabase, ref as rtRef, set as rtSet, get as rtGet,
-    push as rtPush, onValue, onChildAdded, onDisconnect, remove as rtRemove
-  } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js";
+    /* =========================================================================
+       1. Firebase Realtime Database 初期化
+       ========================================================================= */
+    const firebaseConfig = {
+      apiKey: "AIzaSyA6MFlzWeKPHBwnCmkthev4oA7KfveDGN0",
+      authDomain: "chat-76c80.firebaseapp.com",
+      databaseURL: "https://chat-76c80-default-rtdb.firebaseio.com",
+      projectId: "chat-76c80",
+      storageBucket: "chat-76c80.firebasestorage.app",
+      messagingSenderId: "877437732355",
+      appId: "1:877437732355:web:13d88daf434b679c39b036"
+    };
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyAOeVJLFM4IZUYr8Nn0ggEjViawmSYoK1I",
-    authDomain: "dggm-eb932.firebaseapp.com",
-    databaseURL: "https://dggm-eb932-default-rtdb.firebaseio.com",
-    projectId: "dggm-eb932",
-    storageBucket: "dggm-eb932.firebasestorage.app",
-    messagingSenderId: "98596993564",
-    appId: "1:98596993564:web:bb7f3fd0dd318ba7413dd9",
-    measurementId: "G-6Z7WSLEXPM"
-  };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const rtdb = getDatabase(app);
-  const provider = new GoogleAuthProvider();
+    /* =========================================================================
+       2. 定数・グローバル状態
+       ========================================================================= */
+    const MATCH_DURATION_MS = 5 * 60 * 1000; // 1試合5分（300,000ms）
+    const MAX_SLOTS_PER_SERVER = 8;          // 1サーバー最大8枠（人間最優先・空きのみBot）
+    const TARGET_MIN_ENTITIES = 6;           // サーバー内の最低参加数（人間+Bot）
+    const PLAYER_RADIUS = 0.65;
+    const PLAYER_HEIGHT = 1.8;
+    const EYE_HEIGHT = 1.55;
+    const GRAVITY = 24.0;
+    const JUMP_SPEED = 9.2;
+    const MOVE_SPEED = 8.5;
 
-  window.FB = {
-    app, auth, rtdb, provider,
-    signInWithPopup, onAuthStateChanged, signOut,
-    rtRef, rtSet, rtGet, rtPush, onValue, onChildAdded, onDisconnect, rtRemove
-  };
-  window.dispatchEvent(new Event('fb-ready'));
-</script>
+    let myUid = null;
+    let myName = "Player_" + Math.floor(1000 + Math.random() * 9000);
+    let selectedMode = "fps"; // "fps" | "hide"
+    let currentServerId = null;
+    let isHost = false;
+    let isInGame = false;
+    let isPaused = false;
+    let serverTimeOffset = 0; // Firebaseサーバー時刻とのズレ補正
 
-<script>
-'use strict';
+    // サーバー上のデータキャッシュ
+    let serverMeta = null;
+    let serverPlayers = {};
+    let serverBots = {};
+    let serverEventsProcessed = new Set();
+    let serverUnsubs = [];
 
-// ==========================================
-// ページ更新後もログイン維持するセッション管理
-// ==========================================
-const STORAGE_KEY = 'dggm_online_session_v1';
+    // ローカルプレイヤー状態
+    const localPlayer = {
+      x: 0, y: 0, z: 0,
+      vx: 0, vy: 0, vz: 0,
+      yaw: 0, pitch: 0,
+      hp: 100, maxHp: 100,
+      ammo: 30, maxAmmo: 30,
+      reloading: false,
+      onGround: false,
+      role: "fighter", // "fighter" | "seeker" | "hider"
+      score: 0,
+      lastShotTime: 0,
+      deadUntil: 0
+    };
 
-function loadSession(){
-  try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(!raw) return null;
-    const p = JSON.parse(raw);
-    if(p && p.uid && p.username) return p;
-  }catch(e){}
-  return null;
-}
+    // UI要素
+    const lobbyOverlay = document.getElementById("lobbyOverlay");
+    const pauseOverlay = document.getElementById("pauseOverlay");
+    const resultOverlay = document.getElementById("resultOverlay");
+    const hudLayer = document.getElementById("hudLayer");
+    const crosshair = document.getElementById("crosshair");
+    const hitmarker = document.getElementById("hitmarker");
+    const damageVignette = document.getElementById("damageVignette");
+    const toastBox = document.getElementById("toastBox");
 
-function saveSession(profile){
-  try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-  }catch(e){}
-}
+    function showToast(msg) {
+      toastBox.textContent = msg;
+      toastBox.style.opacity = "1";
+      clearTimeout(toastBox._t);
+      toastBox._t = setTimeout(() => { toastBox.style.opacity = "0"; }, 2600);
+    }
 
-function clearSession(){
-  try{
-    localStorage.removeItem(STORAGE_KEY);
-  }catch(e){}
-}
+    function getServerNow() {
+      return Date.now() + serverTimeOffset;
+    }
 
-const APP = {
-  user: null,
-  profile: loadSession(),
-  roomId: 'global-room',
-  ready: false
-};
+    // サーバー時刻オフセット監視
+    onValue(ref(db, ".info/serverTimeOffset"), (snap) => {
+      serverTimeOffset = snap.val() || 0;
+    });
 
-// ==========================================
-// Sound Engine
-// ==========================================
-class SoundEngine {
-  constructor(){this.ctx=null;this.muted=false;this.bgmTimer=null;this.bgmStep=0;}
-  init(){if(!this.ctx){const AC=window.AudioContext||window.webkitAudioContext;this.ctx=new AC();}if(this.ctx.state==='suspended')this.ctx.resume();}
-  toggleMute(){this.muted=!this.muted;if(this.muted)this.stopBGM();else if(gameState.screen==='playing')this.startBGM(gameState.mode);return this.muted;}
-  playTone(freq,type,dur,vol=0.18,slideTo=null){
-    if(this.muted)return;this.init();
-    try{const now=this.ctx.currentTime,osc=this.ctx.createOscillator(),gain=this.ctx.createGain();
-      osc.type=type;osc.frequency.setValueAtTime(freq,now);
-      if(slideTo)osc.frequency.exponentialRampToValueAtTime(slideTo,now+dur);
-      gain.gain.setValueAtTime(vol,now);gain.gain.exponentialRampToValueAtTime(0.001,now+dur);
-      osc.connect(gain);gain.connect(this.ctx.destination);
-      osc.start(now);osc.stop(now+dur);}catch(e){}
-  }
-  startBGM(mode){
-    this.stopBGM();if(this.muted)return;this.init();this.bgmStep=0;
-    const tempo = mode==='fps'?180:(mode==='tag'?210:280);
-    const notes = mode==='fps'?[196,246.94,293.66,392,293.66,246.94,220,293.66]:[261.63,329.63,392,523.25,392,329.63,293.66,392];
-    this.bgmTimer=setInterval(()=>{
-      if(this.muted||gameState.screen!=='playing'||gameState.paused)return;
-      const f=notes[this.bgmStep%notes.length];
-      this.playTone(f,mode==='fps'?'square':'triangle',0.15,0.035);
-      this.bgmStep++;
-    },tempo);
-  }
-  stopBGM(){if(this.bgmTimer){clearInterval(this.bgmTimer);this.bgmTimer=null;}}
-  playJump(){this.playTone(260,'sine',0.18,0.2,540);}
-  playSpring(){this.playTone(220,'triangle',0.35,0.28,880);}
-  playDash(){this.playTone(190,'sawtooth',0.22,0.2,580);}
-  playMorph(){this.playTone(340,'sine',0.12,0.25,760);}
-  playLock(l){this.playTone(l?540:620,'sine',0.12,0.18,l?740:420);}
-  playScanBeam(){this.playTone(720,'sawtooth',0.25,0.2,180);}
-  playTaunt(){[659.25,783.99,1046.5].forEach((n,i)=>setTimeout(()=>this.playTone(n,'sine',0.13,0.22),i*90));}
-  playCoin(){this.playTone(987.77,'sine',0.08,0.16);setTimeout(()=>this.playTone(1318.51,'sine',0.16,0.16),60);}
-  playHit(){this.playTone(150,'sawtooth',0.35,0.32,48);}
-  playShot(){this.playTone(180,'square',0.09,0.22,60);this.playTone(900,'triangle',0.05,0.12,300);}
-  playReload(){this.playTone(300,'sine',0.08,0.15,200);setTimeout(()=>this.playTone(400,'sine',0.08,0.15,600),90);}
-  playTargetHit(){this.playTone(1200,'sine',0.06,0.2);setTimeout(()=>this.playTone(1600,'sine',0.1,0.18),40);}
-  playKill(){[523.25,659.25,783.99,1046.5].forEach((n,i)=>setTimeout(()=>this.playTone(n,'triangle',0.12,0.2),i*45));}
-  playWin(){[523.25,659.25,783.99,1046.5].forEach((n,i)=>setTimeout(()=>this.playTone(n,'triangle',0.35,0.22),i*110));}
-  playLose(){[392,349.23,311.13,261.63].forEach((n,i)=>setTimeout(()=>this.playTone(n,'sawtooth',0.35,0.18),i*150));}
-}
-const sound=new SoundEngine();
+    /* =========================================================================
+       3. Three.js 3Dワールド＆障害物コリジョン（壁貫通完全防止）
+       ========================================================================= */
+    const canvas = document.getElementById("gameCanvas");
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-// ==========================================
-// Prop Defs & 3D Meshes
-// ==========================================
-const PROP_DEFS={
-  crate:{id:'crate',name:'木箱',icon:'📦',radius:0.72,height:1.3,camDist:5.5,walkableTop:true},
-  plant:{id:'plant',name:'観葉植物の鉢',icon:'🪴',radius:0.62,height:1.5,camDist:5.2,walkableTop:false},
-  cone:{id:'cone',name:'カラーコーン',icon:'⚠️',radius:0.42,height:0.95,camDist:4.4,walkableTop:false},
-  bench:{id:'bench',name:'公園のベンチ',icon:'🪑',radius:0.95,height:0.95,camDist:6.4,walkableTop:true},
-  trashcan:{id:'trashcan',name:'ゴミ箱',icon:'🗑️',radius:0.52,height:1.15,camDist:4.8,walkableTop:false},
-  lamp:{id:'lamp',name:'公園の街灯',icon:'🏮',radius:0.45,height:3.1,camDist:6.8,walkableTop:false},
-  acorn:{id:'acorn',name:'どんぐり像',icon:'🌰',radius:0.68,height:1.45,camDist:5.5,walkableTop:false},
-  rock:{id:'rock',name:'庭園の岩',icon:'🪨',radius:0.85,height:1.1,camDist:5.6,walkableTop:true}
-};
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a);
+    scene.fog = new THREE.FogExp2(0x0f172a, 0.011);
 
-function createProp3DMesh(typeId){
-  const g=new THREE.Group();
-  const mat=(c,r=0.65,m=0.05)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
-  switch(typeId){
-    case 'crate':{
-      const box=new THREE.Mesh(new THREE.BoxGeometry(1.3,1.3,1.3),mat(0xb45309,0.8));
-      box.position.y=0.65;box.castShadow=true;box.receiveShadow=true;g.add(box);
-      const fm=mat(0x78350f,0.85);
-      const t1=new THREE.Mesh(new THREE.BoxGeometry(1.36,0.14,1.36),fm);t1.position.y=1.25;g.add(t1);
-      const b1=new THREE.Mesh(new THREE.BoxGeometry(1.36,0.14,1.36),fm);b1.position.y=0.07;g.add(b1);
-      break;}
-    case 'plant':{
-      const pot=new THREE.Mesh(new THREE.CylinderGeometry(0.48,0.36,0.65,14),mat(0xc2410c,0.75));
-      pot.position.y=0.325;pot.castShadow=true;g.add(pot);
-      const lm=mat(0x10b981,0.55);
-      for(let i=0;i<7;i++){
-        const leaf=new THREE.Mesh(new THREE.DodecahedronGeometry(0.32,0),lm);
-        const a=Math.PI*2*i/7;
-        leaf.position.set(Math.cos(a)*0.26,0.85+(i%2)*0.18,Math.sin(a)*0.26);
-        leaf.castShadow=true;g.add(leaf);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 250);
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ライティング
+    const hemiLight = new THREE.HemisphereLight(0xbae6fd, 0x1e293b, 0.9);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.95);
+    dirLight.position.set(35, 55, 25);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.near = 1;
+    dirLight.shadow.camera.far = 160;
+    const d = 55;
+    dirLight.shadow.camera.left = -d;
+    dirLight.shadow.camera.right = d;
+    dirLight.shadow.camera.top = d;
+    dirLight.shadow.camera.bottom = -d;
+    scene.add(dirLight);
+
+    // ワールドグループとAABB障害物配列（すべての壁・障害物を厳密登録）
+    const worldGroup = new THREE.Group();
+    scene.add(worldGroup);
+    let worldColliders = []; // { minX, maxX, minY, maxY, minZ, maxZ, mesh }
+    let spawnPoints = [];
+
+    function clearWorld() {
+      while (worldGroup.children.length > 0) {
+        const obj = worldGroup.children[0];
+        worldGroup.remove(obj);
       }
-      break;}
-    case 'cone':{
-      const base=new THREE.Mesh(new THREE.BoxGeometry(0.75,0.08,0.75),mat(0xea580c,0.6));
-      base.position.y=0.04;base.castShadow=true;g.add(base);
-      const cone=new THREE.Mesh(new THREE.ConeGeometry(0.32,0.9,16),mat(0xf97316,0.45));
-      cone.position.y=0.49;cone.castShadow=true;g.add(cone);
-      break;}
-    case 'bench':{
-      const wm=mat(0x92400e,0.75),lm=mat(0x1e293b,0.5,0.6);
-      for(let i=0;i<3;i++){
-        const p=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.07,0.24),wm);
-        p.position.set(0,0.55,-0.29+i*0.29);p.castShadow=true;g.add(p);
-      }
-      [-0.85,0.85].forEach(lx=>{
-        const leg=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.55,0.75),lm);
-        leg.position.set(lx,0.275,0);leg.castShadow=true;g.add(leg);
+      worldColliders = [];
+      spawnPoints = [];
+    }
+
+    function addSolidBox(cx, cy, cz, w, h, d, colorHex, isCover = true) {
+      const geo = new THREE.BoxGeometry(w, h, d);
+      const mat = new THREE.MeshStandardMaterial({
+        color: colorHex,
+        roughness: 0.72,
+        metalness: 0.15
       });
-      break;}
-    case 'trashcan':{
-      const body=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.36,0.95,16),mat(0x64748b,0.4,0.5));
-      body.position.y=0.475;body.castShadow=true;g.add(body);
-      const lid=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,0.12,16),mat(0x334155,0.4,0.6));
-      lid.position.y=1.0;g.add(lid);
-      break;}
-    case 'lamp':{
-      const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.14,2.7,12),mat(0x1e293b,0.5,0.7));
-      pole.position.y=1.35;pole.castShadow=true;g.add(pole);
-      const lantern=new THREE.Mesh(new THREE.SphereGeometry(0.32,14,14),
-        new THREE.MeshStandardMaterial({color:0xfef08a,emissive:0xf59e0b,emissiveIntensity:0.9,roughness:0.2}));
-      lantern.position.y=2.85;g.add(lantern);
-      break;}
-    case 'acorn':{
-      const body=new THREE.Mesh(new THREE.SphereGeometry(0.56,16,16),mat(0xb45309,0.55));
-      body.scale.set(1,1.25,1);body.position.y=0.65;body.castShadow=true;g.add(body);
-      const cap=new THREE.Mesh(new THREE.SphereGeometry(0.62,16,12,0,Math.PI*2,0,Math.PI*0.55),mat(0x451a03,0.85));
-      cap.position.y=0.92;g.add(cap);
-      break;}
-    case 'rock':{
-      const r=new THREE.Mesh(new THREE.DodecahedronGeometry(0.82,1),mat(0x78716c,0.9));
-      r.scale.set(1.2,0.78,1.05);r.position.y=0.55;r.castShadow=true;g.add(r);
-      break;}
-  }
-  return g;
-}
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(cx, cy, cz);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      worldGroup.add(mesh);
 
-// ==========================================
-// キャラクター（青赤チームカラー対応）
-// ==========================================
-function createCharacterMesh(bodyColor,isSeeker=false,team=null){
-  const g=new THREE.Group();
-  let mainColor = bodyColor;
-  if(team==='blue') mainColor = 0x2563eb;
-  if(team==='red') mainColor = 0xe11d48;
+      // エッジの視認性向上ライン
+      const edges = new THREE.EdgesGeometry(geo);
+      const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x020617, transparent: true, opacity: 0.35 }));
+      mesh.add(line);
 
-  const skinColor=isSeeker?0xfecdd3:0xf5d0a9;
-  const skinMat=new THREE.MeshStandardMaterial({color:skinColor,roughness:0.6});
-  const bodyMat=new THREE.MeshStandardMaterial({color:mainColor,roughness:0.5});
-  const pantsMat=new THREE.MeshStandardMaterial({color:team==='red'?0x450a0a:(team==='blue'?0x172554:0x1e293b),roughness:0.7});
-  const shoeMat=new THREE.MeshStandardMaterial({color:0x0f172a,roughness:0.7});
-  const hairMat=new THREE.MeshStandardMaterial({color:isSeeker?0x1c1917:0x3b2a1e,roughness:0.8});
-  const joints={};
-
-  [{key:'L',sign:-1},{key:'R',sign:1}].forEach(({key,sign})=>{
-    const hip=new THREE.Group();hip.position.set(sign*0.18,1.05,0);g.add(hip);
-    const thigh=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.11,0.55,10),pantsMat);
-    thigh.position.y=-0.275;thigh.castShadow=true;hip.add(thigh);
-    const knee=new THREE.Group();knee.position.y=-0.55;hip.add(knee);
-    const shin=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.08,0.5,10),pantsMat);
-    shin.position.y=-0.25;shin.castShadow=true;knee.add(shin);
-    const shoe=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.12,0.34),shoeMat);
-    shoe.position.set(0,-0.56,0.08);shoe.castShadow=true;knee.add(shoe);
-    joints['hip'+key]=hip;joints['knee'+key]=knee;
-  });
-
-  const torso=new THREE.Group();torso.position.y=1.05;g.add(torso);
-  const chest=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.28,0.82,12),bodyMat);
-  chest.position.y=0.42;chest.castShadow=true;torso.add(chest);
-
-  [{key:'L',sign:-1},{key:'R',sign:1}].forEach(({key,sign})=>{
-    const shoulder=new THREE.Group();shoulder.position.set(sign*0.36,1.78,0);g.add(shoulder);
-    const upper=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.08,0.45,10),bodyMat);
-    upper.position.y=-0.225;upper.castShadow=true;shoulder.add(upper);
-    const elbow=new THREE.Group();elbow.position.y=-0.45;shoulder.add(elbow);
-    const fore=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.07,0.4,10),skinMat);
-    fore.position.y=-0.2;fore.castShadow=true;elbow.add(fore);
-    joints['shoulder'+key]=shoulder;joints['elbow'+key]=elbow;
-  });
-
-  const headGroup=new THREE.Group();headGroup.position.y=2.02;g.add(headGroup);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.24,18,18),skinMat);
-  head.scale.set(0.92,1.08,0.95);head.position.y=0.14;head.castShadow=true;headGroup.add(head);
-  const hair=new THREE.Mesh(new THREE.SphereGeometry(0.26,18,14,0,Math.PI*2,0,Math.PI*0.65),hairMat);
-  hair.scale.set(0.94,1.08,0.97);hair.position.y=0.17;headGroup.add(hair);
-
-  if(team){
-    const visorMat=new THREE.MeshStandardMaterial({
-      color:team==='blue'?0x38bdf8:0xf43f5e,
-      emissive:team==='blue'?0x0284c7:0xe11d48,
-      emissiveIntensity:0.8,roughness:0.2
-    });
-    const visor=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.1,0.12),visorMat);
-    visor.position.set(0,0.16,0.2);headGroup.add(visor);
-  } else {
-    const eyeWhiteMat=new THREE.MeshStandardMaterial({color:0xffffff});
-    const pupilMat=new THREE.MeshStandardMaterial({color:isSeeker?0xf43f5e:0x1e293b});
-    [-0.08,0.08].forEach(ex=>{
-      const white=new THREE.Mesh(new THREE.SphereGeometry(0.05,8,8),eyeWhiteMat);
-      white.position.set(ex,0.15,0.19);headGroup.add(white);
-      const pupil=new THREE.Mesh(new THREE.SphereGeometry(0.03,6,6),pupilMat);
-      pupil.position.set(ex,0.15,0.22);headGroup.add(pupil);
-    });
-  }
-
-  if(isSeeker){
-    const hornMat=new THREE.MeshStandardMaterial({color:0xfacc15,emissive:0xca8a04,emissiveIntensity:0.4});
-    [-0.15,0.15].forEach(hx=>{
-      const horn=new THREE.Mesh(new THREE.ConeGeometry(0.07,0.32,10),hornMat);
-      horn.position.set(hx,0.4,0);horn.rotation.z=hx>0?-0.25:0.25;headGroup.add(horn);
-    });
-  }
-
-  g.userData.joints=joints;
-  g.userData.walkPhase=0;
-  return g;
-}
-
-function animateCharacter(charMesh,dt,moveSpeed,isGrounded,time){
-  const joints=charMesh.userData.joints;
-  if(!joints)return;
-  if(moveSpeed>0.3 && isGrounded) charMesh.userData.walkPhase += dt*moveSpeed*2.8;
-  else charMesh.userData.walkPhase *= 0.9;
-  const phase=charMesh.userData.walkPhase;
-  const swing=Math.sin(phase);
-  if(joints.hipL && joints.hipR){
-    joints.hipL.rotation.x = swing*0.55;
-    joints.hipR.rotation.x = -swing*0.55;
-    joints.kneeL.rotation.x = Math.max(0,-swing)*0.7;
-    joints.kneeR.rotation.x = Math.max(0,swing)*0.7;
-  }
-  if(joints.shoulderL && joints.shoulderR){
-    joints.shoulderL.rotation.x = -swing*0.45;
-    joints.shoulderR.rotation.x = swing*0.45;
-  }
-}
-
-// ==========================================
-// ロブロックス（Roblox）風 頭上ネームタグ＆HPバー
-// ==========================================
-function createRobloxNametagSprite(username, team=null, hp=100, maxHp=100){
-  const canvas=document.createElement('canvas');
-  canvas.width=320;
-  canvas.height=88;
-  const tex=new THREE.CanvasTexture(canvas);
-  tex.minFilter=THREE.LinearFilter;
-  const mat=new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false});
-  const sprite=new THREE.Sprite(mat);
-  sprite.scale.set(2.5,0.68,1);
-  sprite.userData.isNametag=true;
-  sprite.userData.canvas=canvas;
-  sprite.userData.tex=tex;
-  updateRobloxNametag(sprite, username, team, hp, maxHp);
-  return sprite;
-}
-
-function updateRobloxNametag(sprite, username, team=null, hp=100, maxHp=100){
-  if(!sprite || !sprite.userData.canvas) return;
-  const canvas=sprite.userData.canvas;
-  const c=canvas.getContext('2d');
-  c.clearRect(0,0,canvas.width,canvas.height);
-
-  let nameColor = '#ffffff';
-  let prefix = '';
-  if(team==='blue'){ nameColor = '#7dd3fc'; prefix = '[BLUE] '; }
-  if(team==='red'){ nameColor = '#fda4af'; prefix = '[RED] '; }
-
-  const displayText = prefix + (username || 'Player');
-  c.font='900 28px "M PLUS Rounded 1c", sans-serif';
-  c.textAlign='center';
-  c.textBaseline='middle';
-  c.lineJoin='round';
-  c.lineWidth=6;
-  c.strokeStyle='rgba(0, 0, 0, 0.9)';
-  c.strokeText(displayText, 160, 30);
-  c.fillStyle=nameColor;
-  c.fillText(displayText, 160, 30);
-
-  if(maxHp > 0 && team !== null){
-    const barW = 140;
-    const barH = 12;
-    const bx = (320 - barW) / 2;
-    const by = 52;
-    const ratio = Math.max(0, Math.min(1, hp / maxHp));
-
-    c.fillStyle='rgba(15, 23, 42, 0.85)';
-    roundRect(c, bx-2, by-2, barW+4, barH+4, 6);
-    c.fill();
-
-    let barColor = '#22c55e';
-    if(ratio <= 0.5) barColor = '#eab308';
-    if(ratio <= 0.25) barColor = '#ef4444';
-
-    if(ratio > 0){
-      c.fillStyle=barColor;
-      roundRect(c, bx, by, barW * ratio, barH, 4);
-      c.fill();
-    }
-  }
-  sprite.userData.tex.needsUpdate=true;
-}
-
-function roundRect(ctx, x, y, w, h, r){
-  ctx.beginPath();
-  ctx.moveTo(x+r, y);
-  ctx.lineTo(x+w-r, y);
-  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r);
-  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h);
-  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r);
-  ctx.quadraticCurveTo(x, y, x+r, y);
-  ctx.closePath();
-}
-
-function attachNametag(mesh, text, team=null, hp=100, maxHp=100){
-  if(!mesh)return null;
-  if(mesh.userData.nametag){
-    updateRobloxNametag(mesh.userData.nametag, text, team, hp, maxHp);
-    return mesh.userData.nametag;
-  }
-  const tag=createRobloxNametagSprite(text, team, hp, maxHp);
-  tag.position.set(0, 2.75, 0);
-  mesh.add(tag);
-  mesh.userData.nametag=tag;
-  return tag;
-}
-
-// ==========================================
-// Three.js セットアップ
-// ==========================================
-const container=document.getElementById('canvas-container');
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x0b132b);
-scene.fog=new THREE.FogExp2(0x0b132b,0.0065);
-
-const camera=new THREE.PerspectiveCamera(65,window.innerWidth/window.innerHeight,0.1,300);
-const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
-renderer.setSize(window.innerWidth,window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
-renderer.shadowMap.enabled=true;
-renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-container.appendChild(renderer.domElement);
-
-scene.add(new THREE.HemisphereLight(0xa5b4fc,0x1e293b,0.9));
-const dirLight=new THREE.DirectionalLight(0xfffbeb,1.2);
-dirLight.position.set(40,65,35);dirLight.castShadow=true;
-dirLight.shadow.mapSize.width=2048;dirLight.shadow.mapSize.height=2048;
-const sr=70;
-dirLight.shadow.camera.left=-sr;dirLight.shadow.camera.right=sr;dirLight.shadow.camera.top=sr;dirLight.shadow.camera.bottom=-sr;
-scene.add(dirLight);
-
-window.addEventListener('resize',()=>{
-  camera.aspect=window.innerWidth/window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth,window.innerHeight);
-});
-
-// ==========================================
-// Game State
-// ==========================================
-const ARENA_HALF=60;
-
-const gameState={
-  screen:'auth',mode:'fps',tagRole:'runner',phRole:'hider',
-  phase:'play',timer:120,score:0,hp:3,maxHp:3,invulnTimer:0,lastTime:0,
-  paused:false,
-  stats:{morphCount:0,tauntCount:0,coinsCollected:0,tagsMade:0,kills:0,deaths:0},
-  fps:{
-    team:'blue',
-    hp:100, maxHp:100,
-    blueScore:0, redScore:0,
-    respawnTimer:0,
-    reloadTimer:0, magSize:15, ammo:15, fireCooldown:0, recoil:0
-  }
-};
-
-const camCtrl={yaw:0,pitch:0.38,dist:6.2,targetDist:6.2,lastX:0,lastY:0,touchId:null};
-
-const player={
-  pos:new THREE.Vector3(0,0,14),vel:new THREE.Vector3(0,0,0),
-  rotY:0,radius:0.48,height:1.7,onGround:true,
-  speed:9.2,jumpForce:11.5,skillCooldown:0,skillMaxCooldown:2.8,
-  dashTimer:0,tauntCooldown:0,disguise:null,locked:false,lockedRotY:0,
-  targetedProp:null,mesh:null,weaponMesh:null,
-  fpsYaw:Math.PI,fpsPitch:0,moveSpeed:0
-};
-
-let worldGroup=new THREE.Group();
-scene.add(worldGroup);
-let colliders=[];
-let propsList=[];
-let jumpPads=[];
-let coinsList=[];
-let seekersList=[];
-let runnersList=[];
-let propHiders=[];
-let fxList=[];
-let remotePlayers={};
-let fpsBots=[];
-
-const keys={};
-const joystick={active:false,dx:0,dy:0,touchId:null};
-const raycaster=new THREE.Raycaster();
-
-// ==========================================
-// ポインターロック＆ポーズ
-// ==========================================
-const canvasEl=renderer.domElement;
-function requestPointerLock(){
-  if(!document.pointerLockElement && gameState.screen==='playing' && !gameState.paused){
-    try{const p=canvasEl.requestPointerLock();if(p&&p.catch)p.catch(()=>{});}catch(e){}
-  }
-}
-function exitPointerLock(){
-  if(document.pointerLockElement){try{document.exitPointerLock();}catch(e){}}
-}
-function isPointerLocked(){return document.pointerLockElement===canvasEl;}
-function enterPlayingMode(){document.body.classList.add('cursor-hidden');requestPointerLock();hideClickHint();}
-function leavePlayingMode(){document.body.classList.remove('cursor-hidden');exitPointerLock();hideClickHint();}
-
-const clickHintEl=document.getElementById('click-hint');
-function showClickHint(){if(gameState.screen==='playing'&&!gameState.paused&&!isPointerLocked())clickHintEl.classList.add('show');}
-function hideClickHint(){clickHintEl.classList.remove('show');}
-
-canvasEl.addEventListener('mousedown',(e)=>{
-  if(e.button!==0)return;
-  if(gameState.screen==='playing'&&!gameState.paused&&!isPointerLocked())requestPointerLock();
-  if(gameState.mode==='fps'&&gameState.screen==='playing'&&!gameState.paused)shootFPS();
-});
-
-document.addEventListener('pointerlockchange',()=>{
-  if(isPointerLocked()){hideClickHint();document.body.classList.add('cursor-hidden');}
-  else if(gameState.screen==='playing'&&!gameState.paused){showClickHint();document.body.classList.remove('cursor-hidden');}
-});
-
-document.addEventListener('mousemove',(e)=>{
-  if(gameState.screen!=='playing'||gameState.paused||!isPointerLocked())return;
-  const dx=e.movementX||0, dy=e.movementY||0;
-  if(gameState.mode==='fps'){
-    player.fpsYaw-=dx*0.0022;
-    player.fpsPitch=Math.max(-1.35,Math.min(1.35,player.fpsPitch-dy*0.0022));
-  } else {
-    camCtrl.yaw-=dx*0.004;
-    camCtrl.pitch=Math.max(-0.2,Math.min(1.3,camCtrl.pitch+dy*0.004));
-  }
-});
-
-const pauseOverlay=document.getElementById('pause-overlay');
-function pauseGame(){
-  if(gameState.screen!=='playing'||gameState.paused)return;
-  gameState.paused=true;leavePlayingMode();sound.stopBGM();
-  pauseOverlay.classList.add('show');document.getElementById('btn-pause').classList.add('hidden');
-}
-function resumeGame(){
-  if(!gameState.paused)return;
-  gameState.paused=false;pauseOverlay.classList.remove('show');
-  document.getElementById('btn-pause').classList.remove('hidden');
-  enterPlayingMode();sound.startBGM(gameState.mode);gameState.lastTime=performance.now();
-}
-document.getElementById('btn-pause').addEventListener('click',()=>{if(gameState.screen==='playing')pauseGame();});
-document.getElementById('btn-resume').addEventListener('click',resumeGame);
-document.getElementById('btn-pause-lobby').addEventListener('click',()=>{
-  pauseOverlay.classList.remove('show');gameState.paused=false;
-  document.getElementById('btn-pause').classList.add('hidden');endGame(false,true);
-});
-window.addEventListener('keydown',(e)=>{
-  if(e.code==='Escape'&&gameState.screen==='playing'){
-    e.preventDefault();if(gameState.paused)resumeGame();else pauseGame();
-  }
-});
-
-// ==========================================
-// 認証＆自動ログイン維持
-// ==========================================
-const authScreen=document.getElementById('auth-screen');
-const authStepLogin=document.getElementById('auth-step-login');
-const authStepName=document.getElementById('auth-step-name');
-const authError=document.getElementById('auth-error');
-
-function showAuthStep(step){
-  authStepLogin.classList.add('hidden');authStepName.classList.add('hidden');
-  if(step==='login')authStepLogin.classList.remove('hidden');
-  if(step==='name')authStepName.classList.remove('hidden');
-}
-function showAuthError(msg){authError.textContent=msg;authError.classList.remove('hidden');}
-function clearAuthError(){authError.textContent='';authError.classList.add('hidden');}
-
-function enterLobbyWithProfile(profile){
-  APP.profile = profile;
-  saveSession(profile);
-
-  document.getElementById('hud-user-name').textContent=profile.username;
-  document.getElementById('lobby-username').textContent=profile.username;
-  if(profile.photoURL){
-    document.getElementById('hud-user-avatar').src=profile.photoURL;
-    document.getElementById('hud-user-avatar').classList.remove('hidden');
-    document.getElementById('lobby-avatar').src=profile.photoURL;
-    document.getElementById('lobby-avatar').classList.remove('hidden');
-  } else {
-    document.getElementById('hud-user-avatar').classList.add('hidden');
-    document.getElementById('lobby-avatar').classList.add('hidden');
-  }
-
-  authScreen.classList.add('hidden');
-  document.getElementById('title-screen').classList.remove('hidden');
-  document.getElementById('title-screen').classList.add('flex');
-  gameState.screen='title';
-  leavePlayingMode();
-
-  if(APP.ready) startPresenceOnly();
-}
-
-// リロード時も即座にロビーへ復元
-if(APP.profile){
-  enterLobbyWithProfile(APP.profile);
-} else {
-  authScreen.classList.remove('hidden');
-  showAuthStep('login');
-}
-
-window.addEventListener('fb-ready',()=>{
-  APP.ready=true;
-  if(APP.profile) startPresenceOnly();
-  window.FB.onAuthStateChanged(window.FB.auth,(user)=>{
-    APP.user=user;
-    if(user && !APP.profile){
-      document.getElementById('auth-email').textContent=user.email||'';
-      if(user.photoURL){
-        document.getElementById('auth-avatar').src=user.photoURL;
-        document.getElementById('auth-avatar').classList.remove('hidden');
+      if (isCover) {
+        worldColliders.push({
+          minX: cx - w * 0.5,
+          maxX: cx + w * 0.5,
+          minY: cy - h * 0.5,
+          maxY: cy + h * 0.5,
+          minZ: cz - d * 0.5,
+          maxZ: cz + d * 0.5,
+          mesh
+        });
       }
-      authScreen.classList.remove('hidden');
-      showAuthStep('name');
+      return mesh;
     }
-  });
-});
 
-document.getElementById('btn-google-login').addEventListener('click', async ()=>{
-  clearAuthError();
-  if(!window.FB){showAuthError('Firebase接続準備中です');return;}
-  try{
-    const res = await window.FB.signInWithPopup(window.FB.auth, window.FB.provider);
-    APP.user = res.user;
-    document.getElementById('auth-email').textContent=res.user.email||'';
-    if(res.user.photoURL){
-      document.getElementById('auth-avatar').src=res.user.photoURL;
-      document.getElementById('auth-avatar').classList.remove('hidden');
+    // ステージ構築（FPSモード / 障害物が超豊富な3Dかくれんぼステージ）
+    function buildStage(mode) {
+      clearWorld();
+
+      // 床
+      const floorGeo = new THREE.PlaneGeometry(110, 110);
+      const floorMat = new THREE.MeshStandardMaterial({
+        color: mode === "hide" ? 0x1e293b : 0x172033,
+        roughness: 0.85
+      });
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      worldGroup.add(floor);
+
+      // グリッド模様
+      const grid = new THREE.GridHelper(100, 50, 0x38bdf8, 0x334155);
+      grid.position.y = 0.02;
+      grid.material.opacity = 0.22;
+      grid.material.transparent = true;
+      worldGroup.add(grid);
+
+      // 外周の巨大な外壁（絶対に外に出られない・弾も貫通しない）
+      const arenaHalf = 48;
+      const wallH = 12;
+      addSolidBox(0, wallH / 2, -arenaHalf, arenaHalf * 2 + 4, wallH, 3, 0x334155);
+      addSolidBox(0, wallH / 2, arenaHalf, arenaHalf * 2 + 4, wallH, 3, 0x334155);
+      addSolidBox(-arenaHalf, wallH / 2, 0, 3, wallH, arenaHalf * 2 + 4, 0x334155);
+      addSolidBox(arenaHalf, wallH / 2, 0, 3, wallH, arenaHalf * 2 + 4, 0x334155);
+
+      if (mode === "fps") {
+        // FPSタクティカルアリーナ：遮蔽物・通路・スナイパー高台
+        scene.background = new THREE.Color(0x0b1324);
+        scene.fog = new THREE.FogExp2(0x0b1324, 0.01);
+
+        // 中央タワー構造
+        addSolidBox(0, 2.2, 0, 7, 4.4, 7, 0x0284c7);
+        addSolidBox(-12, 1.8, 0, 3, 3.6, 12, 0x475569);
+        addSolidBox(12, 1.8, 0, 3, 3.6, 12, 0x475569);
+        addSolidBox(0, 1.8, -14, 14, 3.6, 3, 0x475569);
+        addSolidBox(0, 1.8, 14, 14, 3.6, 3, 0x475569);
+
+        // 四隅のバンカー＆コンテナ群
+        const bunkerCoords = [
+          [-24, -24], [24, -24], [-24, 24], [24, 24],
+          [-28, 0], [28, 0], [0, -28], [0, 28]
+        ];
+        bunkerCoords.forEach(([bx, bz], idx) => {
+          addSolidBox(bx, 1.5, bz, 6, 3.0, 2.5, idx % 2 === 0 ? 0xd97706 : 0x0d9488);
+          addSolidBox(bx + (bx > 0 ? -4 : 4), 1.0, bz + (bz > 0 ? -4 : 4), 2.5, 2.0, 2.5, 0x64748b);
+        });
+
+        // 細かい遮蔽物ボックス
+        for (let i = -32; i <= 32; i += 16) {
+          if (i === 0) continue;
+          addSolidBox(i, 1.1, -8, 2.2, 2.2, 2.2, 0x3b82f6);
+          addSolidBox(i, 1.1, 8, 2.2, 2.2, 2.2, 0x3b82f6);
+        }
+
+        spawnPoints = [
+          { x: -36, z: -36 }, { x: 36, z: -36 }, { x: -36, z: 36 }, { x: 36, z: 36 },
+          { x: 0, z: -38 }, { x: 0, z: 38 }, { x: -38, z: 0 }, { x: 38, z: 0 }
+        ];
+      } else {
+        // ★ かくれんぼ専用ステージ：大量の障害物・迷路壁・木箱・コンテナ・隠れ家ルーム
+        scene.background = new THREE.Color(0x111827);
+        scene.fog = new THREE.FogExp2(0x111827, 0.013);
+
+        // 1. 大型迷路パーテーション群（視線を遮る高い壁）
+        const mazeWalls = [
+          [-20, 2.5, -20, 14, 5, 1.8, 0x334155],
+          [-20, 2.5, -12, 1.8, 5, 14, 0x475569],
+          [20, 2.5, -20, 14, 5, 1.8, 0x334155],
+          [20, 2.5, -12, 1.8, 5, 14, 0x475569],
+          [-20, 2.5, 20, 14, 5, 1.8, 0x334155],
+          [-20, 2.5, 12, 1.8, 5, 14, 0x475569],
+          [20, 2.5, 20, 14, 5, 1.8, 0x334155],
+          [20, 2.5, 12, 1.8, 5, 14, 0x475569],
+          [0, 2.5, -26, 18, 5, 1.8, 0x1e3a8a],
+          [0, 2.5, 26, 18, 5, 1.8, 0x1e3a8a],
+          [-28, 2.5, 0, 1.8, 5, 18, 0x1e3a8a],
+          [28, 2.5, 0, 1.8, 5, 18, 0x1e3a8a],
+          [0, 2.5, 0, 10, 5, 1.8, 0x0f766e],
+          [0, 2.5, 0, 1.8, 5, 10, 0x0f766e]
+        ];
+        mazeWalls.forEach(w => addSolidBox(...w));
+
+        // 2. 倉庫コンテナ群（カラフルで死角が多い巨大障害物）
+        const containers = [
+          [-34, 1.8, -30, 8, 3.6, 3.4, 0xdc2626],
+          [34, 1.8, -30, 8, 3.6, 3.4, 0x2563eb],
+          [-34, 1.8, 30, 8, 3.6, 3.4, 0x16a34a],
+          [34, 1.8, 30, 8, 3.6, 3.4, 0xd97706],
+          [-10, 1.8, -36, 3.4, 3.6, 8, 0x7c3aed],
+          [10, 1.8, 36, 3.4, 3.6, 8, 0x0891b2],
+          [-36, 1.8, 12, 3.4, 3.6, 8, 0xea580c],
+          [36, 1.8, -12, 3.4, 3.6, 8, 0x059669]
+        ];
+        containers.forEach(c => addSolidBox(...c));
+
+        // 3. 大量の木箱・ピラー・バリケード群（ハイダーが身を隠せる密度の高い障害物）
+        const cratePalette = [0xb45309, 0x92400e, 0x78350f, 0x4b5563, 0x0369a1, 0x15803d];
+        let seed = 42;
+        function pseudoRand() {
+          seed = (seed * 1664525 + 1013904223) % 4294967296;
+          return seed / 4294967296;
+        }
+
+        // 決定論的配置（全クライアントで完全に同じ位置に大量の障害物を生成）
+        for (let gx = -38; gx <= 38; gx += 6.5) {
+          for (let gz = -38; gz <= 38; gz += 6.5) {
+            if (Math.abs(gx) < 5 && Math.abs(gz) < 5) continue;
+            const r = pseudoRand();
+            if (r < 0.62) {
+              const w = 1.6 + pseudoRand() * 1.8;
+              const d = 1.6 + pseudoRand() * 1.8;
+              const h = 1.5 + pseudoRand() * 2.4;
+              const ox = gx + (pseudoRand() - 0.5) * 2.2;
+              const oz = gz + (pseudoRand() - 0.5) * 2.2;
+              const col = cratePalette[Math.floor(pseudoRand() * cratePalette.length)];
+              addSolidBox(ox, h / 2, oz, w, h, d, col);
+            }
+          }
+        }
+
+        spawnPoints = [
+          { x: 0, z: -42 }, { x: 0, z: 42 }, { x: -42, z: 0 }, { x: 42, z: 0 },
+          { x: -38, z: -38 }, { x: 38, z: -38 }, { x: -38, z: 38 }, { x: 38, z: 38 }
+        ];
+      }
     }
-    showAuthStep('name');
-  }catch(e){showAuthError('ログイン失敗: '+e.message);}
-});
 
-document.getElementById('btn-guest-login').addEventListener('click',()=>{
-  clearAuthError();
-  const guestId = 'guest_' + Math.random().toString(36).substring(2,10);
-  APP.user = { uid: guestId, email: 'ゲストオンライン', photoURL: '' };
-  document.getElementById('auth-email').textContent='ゲストモード（ログイン不要・更新後も維持）';
-  document.getElementById('auth-avatar').classList.add('hidden');
-  document.getElementById('input-username').value = 'Player_' + Math.floor(100 + Math.random()*900);
-  showAuthStep('name');
-});
+    /* =========================================================================
+       4. 壁貫通を完全に防ぐ物理衝突・レイキャスト判定エンジン
+       ========================================================================= */
+    // 円柱(XZ平面) + 高さY のAABB衝突解消（プレイヤー・Bot共通で使用）
+    function resolveCylinderWorldCollisions(pos, radius, height) {
+      const margin = 0.001;
+      for (let i = 0; i < worldColliders.length; i++) {
+        const b = worldColliders[i];
+        // 高さ方向が重なっているかチェック
+        if (pos.y + height <= b.minY + 0.05 || pos.y >= b.maxY - 0.05) continue;
 
-document.getElementById('btn-save-name').addEventListener('click',()=>{
-  clearAuthError();
-  const name=document.getElementById('input-username').value.trim();
-  if(name.length<1 || name.length>14){showAuthError('1〜14文字で入力してください');return;}
-  const uid = APP.user?.uid || APP.profile?.uid || ('guest_' + Date.now());
-  enterLobbyWithProfile({
-    uid,
-    username: name,
-    email: APP.user?.email || APP.profile?.email || 'ゲスト',
-    photoURL: APP.user?.photoURL || APP.profile?.photoURL || ''
-  });
-});
+        // ボックス上の最近接点（XZ）
+        const closestX = Math.max(b.minX, Math.min(pos.x, b.maxX));
+        const closestZ = Math.max(b.minZ, Math.min(pos.z, b.maxZ));
+        const dx = pos.x - closestX;
+        const dz = pos.z - closestZ;
+        const distSq = dx * dx + dz * dz;
 
-document.getElementById('btn-lobby-edit-name').addEventListener('click',()=>{
-  document.getElementById('title-screen').classList.add('hidden');
-  document.getElementById('title-screen').classList.remove('flex');
-  authScreen.classList.remove('hidden');
-  document.getElementById('input-username').value = APP.profile?.username || '';
-  showAuthStep('name');
-});
+        if (distSq < radius * radius) {
+          const dist = Math.sqrt(distSq);
+          if (dist > 1e-6) {
+            const overlap = radius - dist + margin;
+            pos.x += (dx / dist) * overlap;
+            pos.z += (dz / dist) * overlap;
+          } else {
+            // 中心がボックス内部に入り込んだ場合、最も近い面へ押し出す
+            const penLeft = Math.abs(pos.x - b.minX);
+            const penRight = Math.abs(b.maxX - pos.x);
+            const penTop = Math.abs(pos.z - b.minZ);
+            const penBottom = Math.abs(b.maxZ - pos.z);
+            const minPen = Math.min(penLeft, penRight, penTop, penBottom);
+            if (minPen === penLeft) pos.x = b.minX - radius - margin;
+            else if (minPen === penRight) pos.x = b.maxX + radius + margin;
+            else if (minPen === penTop) pos.z = b.minZ - radius - margin;
+            else pos.z = b.maxZ + radius + margin;
+          }
+        }
+      }
+      // アリーナ外周の絶対クランプ
+      pos.x = Math.max(-45.5, Math.min(45.5, pos.x));
+      pos.z = Math.max(-45.5, Math.min(45.5, pos.z));
+    }
 
-document.getElementById('btn-lobby-logout').addEventListener('click', async ()=>{
-  stopMultiplayerSync();
-  clearSession();
-  APP.profile = null;
-  if(window.FB){try{await window.FB.signOut(window.FB.auth);}catch(e){}}
-  document.getElementById('title-screen').classList.add('hidden');
-  document.getElementById('title-screen').classList.remove('flex');
-  authScreen.classList.remove('hidden');
-  showAuthStep('login');
-});
+    // サブステップ移動（高速移動やBotが壁をすり抜けるのを完全に防止）
+    function moveEntityWithSubsteps(entity, moveDx, moveDz, radius, height) {
+      const totalDist = Math.hypot(moveDx, moveDz);
+      const maxStep = radius * 0.4; // 半径の40%ずつ分割移動
+      const steps = Math.max(1, Math.ceil(totalDist / maxStep));
+      const stepX = moveDx / steps;
+      const stepZ = moveDz / steps;
 
-// ==========================================
-// FPS チーム自動バランス振り分け（青 vs 赤）
-// ==========================================
-async function assignBalancedTeam(){
-  let blueCount = 0;
-  let redCount = 0;
+      const prevX = entity.x;
+      const prevZ = entity.z;
 
-  if(window.FB && APP.ready){
-    try{
-      const snap = await window.FB.rtGet(window.FB.rtRef(window.FB.rtdb, `rooms/${APP.roomId}/players`));
-      const data = snap.val() || {};
-      const now = Date.now();
-      Object.entries(data).forEach(([uid, p])=>{
-        if(uid === APP.profile?.uid) return;
-        if(p.mode === 'fps' && (now - (p.updatedAt||0) < 15000)){
-          if(p.team === 'blue') blueCount++;
-          else if(p.team === 'red') redCount++;
+      for (let s = 0; s < steps; s++) {
+        entity.x += stepX;
+        entity.z += stepZ;
+        resolveCylinderWorldCollisions(entity, radius, height);
+      }
+
+      const actualMoved = Math.hypot(entity.x - prevX, entity.z - prevZ);
+      return { blocked: totalDist > 0.01 && actualMoved < totalDist * 0.35 };
+    }
+
+    // 3D線分 vs AABB 交差判定（スラブ法：弾丸・視線・Bot射撃の壁貫通を100%防ぐ）
+    function segmentIntersectsAABB(p0, p1, box) {
+      let tmin = 0.0;
+      let tmax = 1.0;
+      const axes = [
+        { s: p0.x, e: p1.x, min: box.minX, max: box.maxX },
+        { s: p0.y, e: p1.y, min: box.minY, max: box.maxY },
+        { s: p0.z, e: p1.z, min: box.minZ, max: box.maxZ }
+      ];
+      for (let i = 0; i < 3; i++) {
+        const a = axes[i];
+        const d = a.e - a.s;
+        if (Math.abs(d) < 1e-8) {
+          if (a.s < a.min || a.s > a.max) return null;
+        } else {
+          const invD = 1.0 / d;
+          let t1 = (a.min - a.s) * invD;
+          let t2 = (a.max - a.s) * invD;
+          if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+          tmin = Math.max(tmin, t1);
+          tmax = Math.min(tmax, t2);
+          if (tmin > tmax) return null;
+        }
+      }
+      return tmin; // 0.0〜1.0 のヒット距離割合
+    }
+
+    // 始点p0から終点p1までの間に壁があるかチェック（最も手前の壁の距離割合tを返す）
+    function raycastWalls(p0, p1) {
+      let closestT = Infinity;
+      for (let i = 0; i < worldColliders.length; i++) {
+        const t = segmentIntersectsAABB(p0, p1, worldColliders[i]);
+        if (t !== null && t < closestT) {
+          closestT = t;
+        }
+      }
+      return closestT <= 1.0 ? closestT : null;
+    }
+
+    // 弾道トレイルエフェクト（必ず壁の手前で止まる）
+    const activeTracers = [];
+    function spawnBulletTracer(startPos, endPos, colorHex = 0x38bdf8) {
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(startPos.x, startPos.y, startPos.z),
+        new THREE.Vector3(endPos.x, endPos.y, endPos.z)
+      ]);
+      const mat = new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.9 });
+      const line = new THREE.Line(geo, mat);
+      scene.add(line);
+      activeTracers.push({ line, life: 0.16 });
+    }
+
+    function updateTracers(dt) {
+      for (let i = activeTracers.length - 1; i >= 0; i--) {
+        const tr = activeTracers[i];
+        tr.life -= dt;
+        tr.line.material.opacity = Math.max(0, tr.life / 0.16);
+        if (tr.life <= 0) {
+          scene.remove(tr.line);
+          tr.line.geometry.dispose();
+          tr.line.material.dispose();
+          activeTracers.splice(i, 1);
+        }
+      }
+    }
+
+    // 着弾スパーク
+    function spawnImpactSpark(pos, colorHex = 0xfbbf24) {
+      const geo = new THREE.SphereGeometry(0.16, 6, 6);
+      const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(pos.x, pos.y, pos.z);
+      scene.add(mesh);
+      setTimeout(() => {
+        scene.remove(mesh);
+        geo.dispose();
+        mat.dispose();
+      }, 180);
+    }
+
+    /* =========================================================================
+       5. 他プレイヤー＆Botの3Dアバター管理
+       ========================================================================= */
+    const remoteMeshes = {}; // id -> { group, targetPos, targetYaw, nameSprite, isBot }
+
+    function createNameTagSprite(name, isBot, role) {
+      const c = document.createElement("canvas");
+      c.width = 256;
+      c.height = 64;
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "rgba(9, 13, 22, 0.78)";
+      ctx.beginPath();
+      ctx.roundRect(12, 10, 232, 44, 12);
+      ctx.fill();
+      ctx.strokeStyle = isBot ? "#f59e0b" : "#38bdf8";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.font = "bold 22px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = isBot ? "#fcd34d" : "#ffffff";
+      const label = (isBot ? "🤖 " : "👤 ") + name;
+      ctx.fillText(label.slice(0, 14), 128, 33);
+
+      const tex = new THREE.CanvasTexture(c);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(2.4, 0.6, 1);
+      sprite.position.y = 2.25;
+      return sprite;
+    }
+
+    function getOrCreateCharacterMesh(id, data, isBot) {
+      if (remoteMeshes[id]) return remoteMeshes[id];
+
+      const group = new THREE.Group();
+      const bodyColor = isBot ? 0xf59e0b : (data.role === "seeker" ? 0xef4444 : 0x0ea5e9);
+
+      // 胴体
+      const bodyGeo = new THREE.CylinderGeometry(0.42, 0.42, 1.15, 12);
+      const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.5 });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.y = 0.75;
+      body.castShadow = true;
+      group.add(body);
+
+      // 頭部
+      const headGeo = new THREE.SphereGeometry(0.32, 12, 12);
+      const headMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 });
+      const head = new THREE.Mesh(headGeo, headMat);
+      head.position.y = 1.55;
+      head.castShadow = true;
+      group.add(head);
+
+      // 武器モデル（向いている方向がわかる銃身）
+      const gunGeo = new THREE.BoxGeometry(0.14, 0.14, 0.75);
+      const gunMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.8, roughness: 0.2 });
+      const gun = new THREE.Mesh(gunGeo, gunMat);
+      gun.position.set(0.35, 1.15, -0.35);
+      group.add(gun);
+
+      const tag = createNameTagSprite(data.name || (isBot ? "BOT" : "Player"), isBot, data.role);
+      group.add(tag);
+
+      group.position.set(data.x || 0, data.y || 0, data.z || 0);
+      scene.add(group);
+
+      remoteMeshes[id] = {
+        group,
+        targetPos: new THREE.Vector3(data.x || 0, data.y || 0, data.z || 0),
+        targetYaw: data.yaw || 0,
+        isBot,
+        lastName: data.name
+      };
+      return remoteMeshes[id];
+    }
+
+    function removeCharacterMesh(id) {
+      if (!remoteMeshes[id]) return;
+      scene.remove(remoteMeshes[id].group);
+      delete remoteMeshes[id];
+    }
+
+    function clearAllRemoteMeshes() {
+      Object.keys(remoteMeshes).forEach(removeCharacterMesh);
+    }
+
+    /* =========================================================================
+       6. オンラインサーバー自動マッチング＆途中参加・人間優先ロジック
+       ========================================================================= */
+    function getSafeSpawnPoint() {
+      if (spawnPoints.length === 0) return { x: 0, z: 0 };
+      const sp = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
+      const pos = { x: sp.x + (Math.random() - 0.5) * 2, y: 0, z: sp.z + (Math.random() - 0.5) * 2 };
+      resolveCylinderWorldCollisions(pos, PLAYER_RADIUS, PLAYER_HEIGHT);
+      return pos;
+    }
+
+    async function findOrCreateOnlineServer(mode) {
+      const now = getServerNow();
+      const serversSnap = await get(ref(db, "onlineGameServers"));
+      let candidates = [];
+
+      if (serversSnap.exists()) {
+        serversSnap.forEach((child) => {
+          const srv = child.val();
+          if (!srv || !srv.meta) return;
+          if (srv.meta.mode !== mode) return;
+
+          const startTime = srv.meta.startTime || 0;
+          const endTime = srv.meta.endTime || (startTime + MATCH_DURATION_MS);
+          // 試合終了まで残り20秒以上あるアクティブなサーバーのみ対象
+          if (endTime - now < 20000) return;
+
+          // アクティブな人間プレイヤー数をカウント（15秒以上通信途絶は除外）
+          const players = srv.players || {};
+          let activeHumanCount = 0;
+          Object.values(players).forEach((p) => {
+            if (p && p.lastSeen && (now - p.lastSeen) < 15000) {
+              activeHumanCount++;
+            }
+          });
+
+          // 最大人数未満なら参加可能
+          if (activeHumanCount < MAX_SLOTS_PER_SERVER) {
+            candidates.push({
+              id: child.key,
+              activeHumanCount,
+              endTime,
+              startTime
+            });
+          }
+        });
+      }
+
+      // ★ 重要：オンラインのユーザーが少ない場合は全員がなるべく同じサーバーに入れるよう、
+      // すでにオンライン人間プレイヤーがいるサーバーを最優先でソートして選択する！
+      candidates.sort((a, b) => {
+        if (b.activeHumanCount !== a.activeHumanCount) {
+          return b.activeHumanCount - a.activeHumanCount; // 人間が多い部屋へ集約
+        }
+        return b.endTime - a.endTime;
+      });
+
+      if (candidates.length > 0) {
+        return candidates[0].id;
+      }
+
+      // 参加できる既存サーバーがない場合のみ新規サーバーを1つ作成
+      const newSrvRef = push(ref(db, "onlineGameServers"));
+      const srvId = newSrvRef.key;
+      const createNow = getServerNow();
+      await set(ref(db, `onlineGameServers/${srvId}/meta`), {
+        mode,
+        status: "playing",
+        startTime: createNow,
+        endTime: createNow + MATCH_DURATION_MS,
+        hostUid: myUid,
+        createdAt: createNow
+      });
+      return srvId;
+    }
+
+    async function joinOnlineMatch(mode) {
+      if (!myUid) {
+        showToast("オンライン認証中...少し待ってからもう一度押してください");
+        return;
+      }
+      leaveCurrentServer();
+
+      selectedMode = mode;
+      const inputName = document.getElementById("playerNameInput").value.trim();
+      if (inputName) myName = inputName;
+
+      showToast("オンラインサーバーを検索中...");
+      const serverId = await findOrCreateOnlineServer(mode);
+      currentServerId = serverId;
+
+      // ステージ生成
+      buildStage(mode);
+
+      // 現在のサーバー情報を取得して役割を決定
+      const srvSnap = await get(ref(db, `onlineGameServers/${serverId}`));
+      const srvVal = srvSnap.val() || {};
+      const existingPlayers = srvVal.players || {};
+      const hasSeeker = Object.values(existingPlayers).some(p => p && p.role === "seeker");
+
+      let assignedRole = "fighter";
+      if (mode === "hide") {
+        assignedRole = hasSeeker ? "hider" : "seeker";
+      }
+
+      const sp = getSafeSpawnPoint();
+      localPlayer.x = sp.x;
+      localPlayer.y = 0;
+      localPlayer.z = sp.z;
+      localPlayer.vx = 0;
+      localPlayer.vy = 0;
+      localPlayer.vz = 0;
+      localPlayer.hp = 100;
+      localPlayer.maxHp = 100;
+      localPlayer.ammo = 30;
+      localPlayer.reloading = false;
+      localPlayer.role = assignedRole;
+      localPlayer.score = 0;
+      localPlayer.deadUntil = 0;
+
+      // 自分のプレイヤーデータをサーバーへ登録（切断時自動削除）
+      const myPlayerRef = ref(db, `onlineGameServers/${serverId}/players/${myUid}`);
+      await set(myPlayerRef, {
+        uid: myUid,
+        name: myName,
+        x: localPlayer.x,
+        y: localPlayer.y,
+        z: localPlayer.z,
+        yaw: localPlayer.yaw,
+        hp: localPlayer.hp,
+        role: localPlayer.role,
+        score: 0,
+        lastSeen: getServerNow()
+      });
+      onDisconnect(myPlayerRef).remove();
+
+      // HUD初期化
+      document.getElementById("hudModeBadge").textContent = mode === "fps" ? "FPS DEATHMATCH" : "3D HIDE & SEEK";
+      document.getElementById("hudRoomId").textContent = "SERVER: #" + serverId.slice(-5).toUpperCase();
+      const roleBanner = document.getElementById("hudRoleBanner");
+      const weaponBox = document.getElementById("hudWeaponBox");
+      if (mode === "hide") {
+        if (assignedRole === "seeker") {
+          roleBanner.textContent = "あなたは【鬼（シーカー）】です！隠れている全員を見つけ出せ！";
+          roleBanner.className = "text-xs font-bold mt-0.5 text-rose-400";
+          weaponBox.classList.remove("hidden");
+          document.getElementById("hudWeaponName").textContent = "SEEKER PULSE RIFLE";
+        } else {
+          roleBanner.textContent = "あなたは【隠れる側（ハイダー）】です！障害物に身を隠せ！";
+          roleBanner.className = "text-xs font-bold mt-0.5 text-emerald-400";
+          weaponBox.classList.add("hidden");
+        }
+      } else {
+        roleBanner.textContent = "全プレイヤーと対戦中（途中参加OK）";
+        roleBanner.className = "text-xs font-bold mt-0.5 text-sky-300";
+        weaponBox.classList.remove("hidden");
+        document.getElementById("hudWeaponName").textContent = "ASSAULT RIFLE";
+      }
+
+      // サーバーリアルタイム同期開始
+      attachServerListeners(serverId);
+
+      lobbyOverlay.classList.add("hidden");
+      resultOverlay.classList.add("hidden");
+      pauseOverlay.classList.add("hidden");
+      hudLayer.classList.remove("hidden");
+      crosshair.classList.remove("hidden");
+
+      isInGame = true;
+      isPaused = false;
+      requestPointerLockSafe();
+      showToast("オンラインサーバーに接続しました！");
+    }
+
+    function attachServerListeners(serverId) {
+      detachServerListeners();
+
+      // 1. メタ情報（開始時刻・終了時刻・ホスト情報）
+      const unsubMeta = onValue(ref(db, `onlineGameServers/${serverId}/meta`), (snap) => {
+        if (!snap.exists()) return;
+        serverMeta = snap.val();
+      });
+
+      // 2. 人間プレイヤー一覧の同期
+      const unsubPlayers = onValue(ref(db, `onlineGameServers/${serverId}/players`), (snap) => {
+        const now = getServerNow();
+        const raw = snap.exists() ? snap.val() : {};
+        const active = {};
+        Object.entries(raw).forEach(([uid, p]) => {
+          if (p && p.lastSeen && (now - p.lastSeen) < 18000) {
+            active[uid] = p;
+          }
+        });
+        serverPlayers = active;
+
+        // ホスト権限の自動選出（最もUIDが小さいアクティブ人間プレイヤーがホストを担う）
+        const activeUids = Object.keys(active).sort();
+        if (activeUids.length > 0 && activeUids[0] === myUid) {
+          isHost = true;
+          document.getElementById("hudHostBadge").classList.remove("hidden");
+          if (serverMeta && serverMeta.hostUid !== myUid) {
+            update(ref(db, `onlineGameServers/${serverId}/meta`), { hostUid: myUid }).catch(() => {});
+          }
+        } else {
+          isHost = false;
+          document.getElementById("hudHostBadge").classList.add("hidden");
+        }
+
+        // 他プレイヤーメッシュ更新
+        Object.entries(active).forEach(([uid, p]) => {
+          if (uid === myUid) return;
+          const m = getOrCreateCharacterMesh(uid, p, false);
+          m.targetPos.set(p.x || 0, p.y || 0, p.z || 0);
+          m.targetYaw = p.yaw || 0;
+          m.group.visible = (p.hp || 0) > 0;
+        });
+
+        // 退出したプレイヤーのメッシュ削除
+        Object.keys(remoteMeshes).forEach((id) => {
+          if (!remoteMeshes[id].isBot && !active[id]) {
+            removeCharacterMesh(id);
+          }
+        });
+
+        updateScoreboardAndCounts();
+      });
+
+      // 3. Bot一覧の同期（人間が増えるとBotが自動削減され、人間優先される）
+      const unsubBots = onValue(ref(db, `onlineGameServers/${serverId}/bots`), (snap) => {
+        const raw = snap.exists() ? snap.val() : {};
+        serverBots = raw;
+
+        Object.entries(raw).forEach(([botId, b]) => {
+          if (!b) return;
+          const m = getOrCreateCharacterMesh(botId, b, true);
+          m.targetPos.set(b.x || 0, b.y || 0, b.z || 0);
+          m.targetYaw = b.yaw || 0;
+          m.group.visible = (b.hp || 0) > 0;
+        });
+
+        Object.keys(remoteMeshes).forEach((id) => {
+          if (remoteMeshes[id].isBot && !raw[id]) {
+            removeCharacterMesh(id);
+          }
+        });
+
+        updateScoreboardAndCounts();
+      });
+
+      // 4. 射撃・ダメージ・キルイベントの同期
+      const unsubEvents = onValue(ref(db, `onlineGameServers/${serverId}/events`), (snap) => {
+        if (!snap.exists()) return;
+        const now = getServerNow();
+        snap.forEach((child) => {
+          const evId = child.key;
+          if (serverEventsProcessed.has(evId)) return;
+          serverEventsProcessed.add(evId);
+
+          const ev = child.val();
+          if (!ev || (now - (ev.at || 0)) > 8000) return;
+
+          if (ev.type === "shot") {
+            if (ev.shooterId !== myUid) {
+              spawnBulletTracer(ev.from, ev.to, ev.isBot ? 0xf59e0b : 0x38bdf8);
+              spawnImpactSpark(ev.to, 0xfbbf24);
+            }
+          } else if (ev.type === "damage") {
+            if (ev.targetId === myUid && localPlayer.hp > 0) {
+              applyDamageToLocalPlayer(ev.amount || 20, ev.attackerName || "Enemy", ev.attackerId);
+            }
+          } else if (ev.type === "kill") {
+            addKillFeedItem(ev.killerName, ev.victimName);
+          }
+        });
+      });
+
+      serverUnsubs = [unsubMeta, unsubPlayers, unsubBots, unsubEvents];
+    }
+
+    function detachServerListeners() {
+      serverUnsubs.forEach((fn) => { try { fn(); } catch (e) {} });
+      serverUnsubs = [];
+      serverEventsProcessed.clear();
+    }
+
+    function leaveCurrentServer() {
+      if (currentServerId && myUid) {
+        remove(ref(db, `onlineGameServers/${currentServerId}/players/${myUid}`)).catch(() => {});
+      }
+      detachServerListeners();
+      clearAllRemoteMeshes();
+      currentServerId = null;
+      isHost = false;
+      isInGame = false;
+      serverMeta = null;
+      serverPlayers = {};
+      serverBots = {};
+    }
+
+    /* =========================================================================
+       7. ホストによるBot管理（人間最優先＆Bot壁貫通ゼロAI）
+       ========================================================================= */
+    const localBotAiState = {}; // botId -> { dirX, dirZ, changeTimer, shotCooldown }
+
+    function manageServerBots(dt) {
+      if (!isHost || !currentServerId || !serverMeta) return;
+
+      const humanUids = Object.keys(serverPlayers);
+      const humanCount = humanUids.length;
+      // 人間優先：人間がTARGET_MIN_ENTITIES以上ならBotは0体、少ない分だけBotを補充
+      const desiredBotCount = Math.max(0, Math.min(MAX_SLOTS_PER_SERVER - humanCount, TARGET_MIN_ENTITIES - humanCount));
+      const botIds = Object.keys(serverBots);
+
+      // 人間が途中参加して定員に近づいたら、余分なBotを即座に削除して人間を優先！
+      if (botIds.length > desiredBotCount) {
+        const excess = botIds.slice(desiredBotCount);
+        excess.forEach((bId) => {
+          remove(ref(db, `onlineGameServers/${currentServerId}/bots/${bId}`)).catch(() => {});
+          delete localBotAiState[bId];
+        });
+        return;
+      }
+
+      // Botが不足している場合は追加生成
+      if (botIds.length < desiredBotCount) {
+        const newBotId = "bot_" + Math.floor(10000 + Math.random() * 90000);
+        const sp = getSafeSpawnPoint();
+        const botRole = selectedMode === "hide" ? "hider" : "fighter";
+        set(ref(db, `onlineGameServers/${currentServerId}/bots/${newBotId}`), {
+          id: newBotId,
+          name: "BOT-" + newBotId.slice(-3),
+          x: sp.x,
+          y: 0,
+          z: sp.z,
+          yaw: 0,
+          hp: 100,
+          role: botRole,
+          score: 0
+        }).catch(() => {});
+        return;
+      }
+
+      // 各BotのAI移動と攻撃（壁貫通完全防止）
+      const now = getServerNow();
+      const botUpdates = {};
+
+      botIds.forEach((bId) => {
+        const b = serverBots[bId];
+        if (!b) return;
+
+        if (!localBotAiState[bId]) {
+          const ang = Math.random() * Math.PI * 2;
+          localBotAiState[bId] = {
+            dirX: Math.cos(ang),
+            dirZ: Math.sin(ang),
+            changeTimer: 1.5 + Math.random() * 2.0,
+            shotCooldown: 1.0 + Math.random() * 1.5,
+            deadUntil: 0
+          };
+        }
+        const ai = localBotAiState[bId];
+
+        // 死亡中のBotリスポーン処理
+        if ((b.hp || 0) <= 0) {
+          if (ai.deadUntil === 0) ai.deadUntil = now + 3500;
+          if (now >= ai.deadUntil) {
+            ai.deadUntil = 0;
+            const sp = getSafeSpawnPoint();
+            botUpdates[`${bId}/x`] = sp.x;
+            botUpdates[`${bId}/z`] = sp.z;
+            botUpdates[`${bId}/hp`] = 100;
+          }
+          return;
+        }
+
+        // 最も近い生存人間プレイヤーを探す
+        let nearestTarget = null;
+        let nearestDist = Infinity;
+        Object.entries(serverPlayers).forEach(([uid, p]) => {
+          if (!p || (p.hp || 0) <= 0) return;
+          if (selectedMode === "hide" && b.role === p.role) return;
+          const d = Math.hypot((p.x - b.x), (p.z - b.z));
+          if (d < nearestDist) {
+            nearestDist = d;
+            nearestTarget = { id: uid, ...p };
+          }
+        });
+
+        ai.changeTimer -= dt;
+        if (ai.changeTimer <= 0) {
+          if (nearestTarget && nearestDist < 28) {
+            const toX = nearestTarget.x - b.x;
+            const toZ = nearestTarget.z - b.z;
+            const len = Math.hypot(toX, toZ) || 1;
+            // かくれんぼのハイダーBotは鬼から逃げる、FPSのBotは適度な距離を保つ
+            const sign = (selectedMode === "hide" && b.role === "hider") ? -1 : (nearestDist < 7 ? -0.5 : 1);
+            const jitter = (Math.random() - 0.5) * 0.9;
+            ai.dirX = (toX / len) * sign * Math.cos(jitter) - (toZ / len) * sign * Math.sin(jitter);
+            ai.dirZ = (toX / len) * sign * Math.sin(jitter) + (toZ / len) * sign * Math.cos(jitter);
+          } else {
+            const ang = Math.random() * Math.PI * 2;
+            ai.dirX = Math.cos(ang);
+            ai.dirZ = Math.sin(ang);
+          }
+          ai.changeTimer = 1.2 + Math.random() * 1.8;
+        }
+
+        // ★ サブステップ物理移動＋AABB衝突解消（Botが壁を貫通するバグを完全根絶）
+        const botSpeed = 5.4;
+        const botPos = { x: b.x, y: 0, z: b.z };
+        const res = moveEntityWithSubsteps(botPos, ai.dirX * botSpeed * dt, ai.dirZ * botSpeed * dt, PLAYER_RADIUS, PLAYER_HEIGHT);
+
+        // 壁にぶつかったら即座に別の方向へ向きを変える
+        if (res.blocked) {
+          const newAng = Math.random() * Math.PI * 2;
+          ai.dirX = Math.cos(newAng);
+          ai.dirZ = Math.sin(newAng);
+          ai.changeTimer = 1.0;
+        }
+
+        const yaw = nearestTarget
+          ? Math.atan2(-(nearestTarget.x - botPos.x), -(nearestTarget.z - botPos.z))
+          : Math.atan2(-ai.dirX, -ai.dirZ);
+
+        botUpdates[`${bId}/x`] = Number(botPos.x.toFixed(3));
+        botUpdates[`${bId}/z`] = Number(botPos.z.toFixed(3));
+        botUpdates[`${bId}/yaw`] = Number(yaw.toFixed(3));
+
+        // ★ Botの射撃判定（必ず壁レイキャストを行い、壁の向こう側のプレイヤーには絶対に当たらない！）
+        if (selectedMode === "fps" && nearestTarget && nearestDist < 32) {
+          ai.shotCooldown -= dt;
+          if (ai.shotCooldown <= 0) {
+            ai.shotCooldown = 1.1 + Math.random() * 0.9;
+            const origin = { x: botPos.x, y: 1.35, z: botPos.z };
+            const spread = 0.55;
+            const aimEnd = {
+              x: nearestTarget.x + (Math.random() - 0.5) * spread,
+              y: 1.2 + (Math.random() - 0.5) * 0.3,
+              z: nearestTarget.z + (Math.random() - 0.5) * spread
+            };
+
+            // 壁との交差判定（壁がターゲットより手前にあれば弾は壁で止まる！）
+            const wallHitT = raycastWalls(origin, aimEnd);
+            if (wallHitT !== null) {
+              // 壁に阻まれた場合：壁の表面で着弾エフェクトのみ発生させ、ダメージは与えない
+              const wallPoint = {
+                x: origin.x + (aimEnd.x - origin.x) * wallHitT,
+                y: origin.y + (aimEnd.y - origin.y) * wallHitT,
+                z: origin.z + (aimEnd.z - origin.z) * wallHitT
+              };
+              spawnBulletTracer(origin, wallPoint, 0xf59e0b);
+              spawnImpactSpark(wallPoint, 0xf59e0b);
+            } else {
+              // 壁がない直線視線（LOS）が通っている場合のみ命中判定
+              spawnBulletTracer(origin, aimEnd, 0xf59e0b);
+              const hitDist = Math.hypot(aimEnd.x - nearestTarget.x, aimEnd.z - nearestTarget.z);
+              if (hitDist < 0.85) {
+                push(ref(db, `onlineGameServers/${currentServerId}/events`), {
+                  type: "shot",
+                  shooterId: bId,
+                  isBot: true,
+                  from: origin,
+                  to: aimEnd,
+                  at: now
+                }).catch(() => {});
+
+                push(ref(db, `onlineGameServers/${currentServerId}/events`), {
+                  type: "damage",
+                  targetId: nearestTarget.id,
+                  attackerId: bId,
+                  attackerName: b.name,
+                  amount: 14,
+                  at: now
+                }).catch(() => {});
+              }
+            }
+          }
         }
       });
-    }catch(e){}
-  }
 
-  if(blueCount < redCount) return 'blue';
-  if(redCount < blueCount) return 'red';
-  return Math.random() < 0.5 ? 'blue' : 'red';
-}
-
-// ==========================================
-// ワールド構築（FPS専用ステージ vs 公園ステージ）
-// ==========================================
-function build3DWorld(mode,isPhSeeker){
-  scene.remove(worldGroup);
-  worldGroup.traverse(obj=>{
-    if(obj.geometry)obj.geometry.dispose();
-    if(obj.material){
-      if(Array.isArray(obj.material))obj.material.forEach(m=>m.dispose());
-      else obj.material.dispose();
+      if (Object.keys(botUpdates).length > 0) {
+        update(ref(db, `onlineGameServers/${currentServerId}/bots`), botUpdates).catch(() => {});
+      }
     }
-  });
-  worldGroup=new THREE.Group();
-  scene.add(worldGroup);
 
-  colliders=[];propsList=[];jumpPads=[];coinsList=[];seekersList=[];runnersList=[];propHiders=[];fxList=[];fpsBots=[];
-  Object.values(remotePlayers).forEach(rp=>{if(rp.mesh)worldGroup.remove(rp.mesh);});
-  remotePlayers={};
+    /* =========================================================================
+       8. ローカルプレイヤーの射撃（壁レイキャスト優先で壁貫通ゼロ）
+       ========================================================================= */
+    function fireLocalWeapon() {
+      if (!isInGame || isPaused || localPlayer.hp <= 0 || localPlayer.reloading) return;
+      if (selectedMode === "hide" && localPlayer.role !== "seeker") return;
 
-  if(mode==='fps'){
-    buildFPSBattleArena();
-    return;
-  }
+      const now = performance.now();
+      if (now - localPlayer.lastShotTime < 140) return;
+      if (localPlayer.ammo <= 0) {
+        reloadLocalWeapon();
+        return;
+      }
 
-  // 公園ステージ
-  const ground=new THREE.Mesh(new THREE.PlaneGeometry(ARENA_HALF*2,ARENA_HALF*2),new THREE.MeshStandardMaterial({color:0x14532d,roughness:0.9}));
-  ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;worldGroup.add(ground);
+      localPlayer.lastShotTime = now;
+      localPlayer.ammo--;
+      updateWeaponHud();
 
-  const plaza=new THREE.Mesh(new THREE.CylinderGeometry(13,13,0.05,48),new THREE.MeshStandardMaterial({color:0x334155,roughness:0.7}));
-  plaza.position.y=0.025;plaza.receiveShadow=true;worldGroup.add(plaza);
+      // カメラ視線ベクトル
+      const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(localPlayer.pitch, localPlayer.yaw, 0, "YXZ")).normalize();
+      const maxRange = selectedMode === "hide" ? 6.5 : 85.0; // かくれんぼの鬼は近距離キャッチパルス
+      const origin = { x: localPlayer.x, y: localPlayer.y + EYE_HEIGHT, z: localPlayer.z };
+      const farEnd = {
+        x: origin.x + dir.x * maxRange,
+        y: origin.y + dir.y * maxRange,
+        z: origin.z + dir.z * maxRange
+      };
 
-  const fenceMat=new THREE.MeshStandardMaterial({color:0x78350f,roughness:0.8});
-  [
-    {x:0,z:-ARENA_HALF,w:ARENA_HALF*2+1,d:1.5},{x:0,z:ARENA_HALF,w:ARENA_HALF*2+1,d:1.5},
-    {x:-ARENA_HALF,z:0,w:1.5,d:ARENA_HALF*2+1},{x:ARENA_HALF,z:0,w:1.5,d:ARENA_HALF*2+1}
-  ].forEach(pw=>{
-    const m=new THREE.Mesh(new THREE.BoxGeometry(pw.w,3.5,pw.d),fenceMat);
-    m.position.set(pw.x,1.75,pw.z);m.castShadow=true;worldGroup.add(m);
-  });
+      // 1. まず壁との交差距離を計算（壁の奥の敵は絶対に撃ち抜けない）
+      const wallT = raycastWalls(origin, farEnd);
+      const effectiveMaxT = wallT !== null ? wallT : 1.0;
 
-  [{x:-20,z:-30},{x:20,z:30},{x:-30,z:20},{x:30,z:-20}].forEach(jp=>{
-    const pad=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.5,0.22,18),
-      new THREE.MeshStandardMaterial({color:0x10b981,emissive:0x059669,emissiveIntensity:0.6}));
-    pad.position.set(jp.x,0.11,jp.z);worldGroup.add(pad);jumpPads.push({x:jp.x,z:jp.z,radius:1.5,mesh:pad});
-  });
+      // 2. 壁より手前にいる敵プレイヤー / Botを探索
+      let hitEntity = null;
+      let bestEntityT = effectiveMaxT;
 
-  [
-    {type:'bench',x:0,z:-9,rotY:0},{type:'bench',x:0,z:9,rotY:Math.PI},
-    {type:'crate',x:-25,z:-25,rotY:0.2},{type:'plant',x:25,z:-25,rotY:0},
-    {type:'cone',x:-25,z:25,rotY:0},{type:'acorn',x:25,z:25,rotY:0.5}
-  ].forEach(sp=>spawnWorldProp(sp.type,sp.x,0,sp.z,sp.rotY,false));
+      const allTargets = [];
+      Object.entries(serverPlayers).forEach(([uid, p]) => {
+        if (uid !== myUid && p && (p.hp || 0) > 0) {
+          if (selectedMode === "hide" && p.role === "seeker") return;
+          allTargets.push({ id: uid, isBot: false, ...p });
+        }
+      });
+      Object.entries(serverBots).forEach(([bId, b]) => {
+        if (b && (b.hp || 0) > 0) {
+          allTargets.push({ id: bId, isBot: true, ...b });
+        }
+      });
 
-  if(mode==='tag'&&gameState.tagRole==='runner'){for(let i=0;i<30;i++)spawnStarCoin();}
-}
+      allTargets.forEach((t) => {
+        const targetBox = {
+          minX: t.x - 0.55,
+          maxX: t.x + 0.55,
+          minY: (t.y || 0),
+          maxY: (t.y || 0) + PLAYER_HEIGHT,
+          minZ: t.z - 0.55,
+          maxZ: t.z + 0.55
+        };
+        const hitT = segmentIntersectsAABB(origin, farEnd, targetBox);
+        if (hitT !== null && hitT < bestEntityT) {
+          bestEntityT = hitT;
+          hitEntity = t;
+        }
+      });
 
-function buildFPSBattleArena(){
-  const floor=new THREE.Mesh(
-    new THREE.PlaneGeometry(ARENA_HALF*2,ARENA_HALF*2),
-    new THREE.MeshStandardMaterial({color:0x1e293b,roughness:0.75,metalness:0.2})
-  );
-  floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;worldGroup.add(floor);
+      const impactPoint = {
+        x: origin.x + (farEnd.x - origin.x) * bestEntityT,
+        y: origin.y + (farEnd.y - origin.y) * bestEntityT,
+        z: origin.z + (farEnd.z - origin.z) * bestEntityT
+      };
 
-  const grid=new THREE.GridHelper(ARENA_HALF*2, 40, 0x38bdf8, 0x334155);
-  grid.position.y=0.02;worldGroup.add(grid);
+      spawnBulletTracer(origin, impactPoint, 0x38bdf8);
+      spawnImpactSpark(impactPoint, hitEntity ? 0xef4444 : 0x38bdf8);
 
-  const wallMat=new THREE.MeshStandardMaterial({color:0x0f172a,roughness:0.6,metalness:0.4});
-  [
-    {x:0,z:-ARENA_HALF,w:ARENA_HALF*2+2,d:2},{x:0,z:ARENA_HALF,w:ARENA_HALF*2+2,d:2},
-    {x:-ARENA_HALF,z:0,w:2,d:ARENA_HALF*2+2},{x:ARENA_HALF,z:0,w:2,d:ARENA_HALF*2+2}
-  ].forEach(pw=>{
-    const m=new THREE.Mesh(new THREE.BoxGeometry(pw.w,6,pw.d),wallMat);
-    m.position.set(pw.x,3,pw.z);m.castShadow=true;worldGroup.add(m);
-  });
+      const serverNow = getServerNow();
+      push(ref(db, `onlineGameServers/${currentServerId}/events`), {
+        type: "shot",
+        shooterId: myUid,
+        isBot: false,
+        from: origin,
+        to: impactPoint,
+        at: serverNow
+      }).catch(() => {});
 
-  const addBlock=(x,z,w,h,d,color,emissive=0x000000,emInt=0)=>{
-    const mat=new THREE.MeshStandardMaterial({color,roughness:0.55,metalness:0.25,emissive,emissiveIntensity:emInt});
-    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-    m.position.set(x,h/2,z);m.castShadow=true;m.receiveShadow=true;worldGroup.add(m);
-    addBoxCollider(x,z,w,d,h);
-  };
+      if (hitEntity) {
+        // ヒットマーカー表示
+        hitmarker.classList.add("active");
+        clearTimeout(hitmarker._t);
+        hitmarker._t = setTimeout(() => hitmarker.classList.remove("active"), 130);
 
-  // 🔵 BLUE BASE (南: Z = +44)
-  const blueZone=new THREE.Mesh(new THREE.PlaneGeometry(24,14),
-    new THREE.MeshStandardMaterial({color:0x1d4ed8,emissive:0x1e40af,emissiveIntensity:0.5}));
-  blueZone.rotation.x=-Math.PI/2;blueZone.position.set(0,0.03,44);worldGroup.add(blueZone);
-  addBlock(-8,36,5,2.2,1.5,0x2563eb,0x1d4ed8,0.3);
-  addBlock( 8,36,5,2.2,1.5,0x2563eb,0x1d4ed8,0.3);
-  addBlock( 0,32,4,1.3,1.5,0x3b82f6);
+        const dmg = selectedMode === "hide" ? 100 : 34;
+        if (hitEntity.isBot) {
+          // Botへのダメージは即座にDB反映
+          const nextHp = Math.max(0, (hitEntity.hp || 100) - dmg);
+          update(ref(db, `onlineGameServers/${currentServerId}/bots/${hitEntity.id}`), { hp: nextHp }).catch(() => {});
+          if (nextHp === 0) {
+            localPlayer.score += 100;
+            update(ref(db, `onlineGameServers/${currentServerId}/players/${myUid}`), { score: localPlayer.score }).catch(() => {});
+            push(ref(db, `onlineGameServers/${currentServerId}/events`), {
+              type: "kill",
+              killerName: myName,
+              victimName: hitEntity.name,
+              at: serverNow
+            }).catch(() => {});
+          }
+        } else {
+          // 人間プレイヤーへのダメージイベント送信
+          push(ref(db, `onlineGameServers/${currentServerId}/events`), {
+            type: "damage",
+            targetId: hitEntity.id,
+            attackerId: myUid,
+            attackerName: myName,
+            amount: dmg,
+            at: serverNow
+          }).catch(() => {});
+          if ((hitEntity.hp || 100) - dmg <= 0) {
+            localPlayer.score += 150;
+            update(ref(db, `onlineGameServers/${currentServerId}/players/${myUid}`), { score: localPlayer.score }).catch(() => {});
+          }
+        }
+      }
 
-  // 🔴 RED BASE (北: Z = -44)
-  const redZone=new THREE.Mesh(new THREE.PlaneGeometry(24,14),
-    new THREE.MeshStandardMaterial({color:0xb91c1c,emissive:0x991b1b,emissiveIntensity:0.5}));
-  redZone.rotation.x=-Math.PI/2;redZone.position.set(0,0.03,-44);worldGroup.add(redZone);
-  addBlock(-8,-36,5,2.2,1.5,0xe11d48,0xbe123c,0.3);
-  addBlock( 8,-36,5,2.2,1.5,0xe11d48,0xbe123c,0.3);
-  addBlock( 0,-32,4,1.3,1.5,0xf43f5e);
+      if (localPlayer.ammo === 0) reloadLocalWeapon();
+    }
 
-  // 中央タワー＆遮蔽物
-  addBlock(0,0,6,3.0,6,0x475569,0xf59e0b,0.15);
-  addBlock(0,0,3,5.2,3,0x334155);
-  addBlock(-10,0,2.5,1.4,6,0x64748b);
-  addBlock( 10,0,2.5,1.4,6,0x64748b);
-  addBlock( 0,12,6,1.4,2,0x64748b);
-  addBlock( 0,-12,6,1.4,2,0x64748b);
+    function reloadLocalWeapon() {
+      if (localPlayer.reloading || localPlayer.ammo === localPlayer.maxAmmo) return;
+      localPlayer.reloading = true;
+      document.getElementById("hudReloadText").textContent = "リロード中...";
+      setTimeout(() => {
+        localPlayer.ammo = localPlayer.maxAmmo;
+        localPlayer.reloading = false;
+        updateWeaponHud();
+      }, 1100);
+    }
 
-  // 左右高台デッキ＆段差
-  [-28,28].forEach(sx=>{
-    addBlock(sx,0,8,2.8,16,0x334155);
-    addBlock(sx>0?sx-3.5:sx+3.5,-5,0.8,3.8,4,0x475569);
-    addBlock(sx>0?sx-3.5:sx+3.5, 5,0.8,3.8,4,0x475569);
-    addBlock(sx, 11,6,1.8,4,0x475569);
-    addBlock(sx, 15,6,0.9,4,0x64748b);
-    addBlock(sx,-11,6,1.8,4,0x475569);
-    addBlock(sx,-15,6,0.9,4,0x64748b);
-  });
+    function applyDamageToLocalPlayer(amount, attackerName, attackerId) {
+      if (localPlayer.hp <= 0) return;
+      localPlayer.hp = Math.max(0, localPlayer.hp - amount);
+      updateHpHud();
 
-  // 中距離コンテナ
-  [
-    {x:-18,z:22,w:5,h:2.5,d:2.5,c:0x0284c7},{x:18,z:22,w:5,h:2.5,d:2.5,c:0x0284c7},
-    {x:-18,z:-22,w:5,h:2.5,d:2.5,c:0xe11d48},{x:18,z:-22,w:5,h:2.5,d:2.5,c:0xe11d48}
-  ].forEach(b=>addBlock(b.x,b.z,b.w,b.h,b.d,b.c));
+      damageVignette.classList.add("flash");
+      setTimeout(() => damageVignette.classList.remove("flash"), 180);
 
-  // ジャンプパッド
-  [{x:-14,z:14},{x:14,z:14},{x:-14,z:-14},{x:14,z:-14}].forEach(jp=>{
-    const pad=new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.6,0.22,18),
-      new THREE.MeshStandardMaterial({color:0x38bdf8,emissive:0x0284c7,emissiveIntensity:0.8}));
-    pad.position.set(jp.x,0.11,jp.z);worldGroup.add(pad);jumpPads.push({x:jp.x,z:jp.z,radius:1.6,mesh:pad});
-  });
+      if (localPlayer.hp === 0) {
+        localPlayer.deadUntil = getServerNow() + 3000;
+        showToast(`${attackerName} に倒されました！3秒後にリスポーンします`);
+        push(ref(db, `onlineGameServers/${currentServerId}/events`), {
+          type: "kill",
+          killerName: attackerName,
+          victimName: myName,
+          at: getServerNow()
+        }).catch(() => {});
+        update(ref(db, `onlineGameServers/${currentServerId}/players/${myUid}`), { hp: 0 }).catch(() => {});
+      }
+    }
 
-  spawnFPSBots();
-}
+    /* =========================================================================
+       9. 入力操作（ESCを押しても背景を絶対にぼかさない！）
+       ========================================================================= */
+    const keys = {};
+    let mouseSensitivity = 1.0;
 
-function spawnFPSBots(){
-  const enemyTeam = gameState.fps.team==='blue'?'red':'blue';
-  const allyTeam = gameState.fps.team;
-  [
-    {name:'Bot_Alpha', team:enemyTeam},
-    {name:'Bot_Bravo', team:enemyTeam},
-    {name:'Bot_Wingman', team:allyTeam}
-  ].forEach((cfg,idx)=>{
-    const spawnZ = cfg.team==='blue'?40:-40;
-    const spawnX = (idx-1)*9;
-    const mesh=createCharacterMesh(0x38bdf8,false,cfg.team);
-    mesh.position.set(spawnX,0,spawnZ);worldGroup.add(mesh);
-    attachNametag(mesh, cfg.name, cfg.team, 100, 100);
-    fpsBots.push({
-      id:'bot_'+idx, name:cfg.name, team:cfg.team, mesh,
-      pos:new THREE.Vector3(spawnX,0,spawnZ), vel:new THREE.Vector3(),
-      rotY:cfg.team==='blue'?Math.PI:0, hp:100, maxHp:100,
-      deadTimer:0, shootTimer:1.6+Math.random(), moveTimer:0,
-      targetPos:new THREE.Vector3((Math.random()-0.5)*50,0,(Math.random()-0.5)*50), moveSpeed:0
+    document.addEventListener("keydown", (e) => {
+      keys[e.code] = true;
+      if (e.code === "KeyR" && isInGame && !isPaused) {
+        reloadLocalWeapon();
+      }
+      if (e.code === "Escape" && isInGame) {
+        if (document.pointerLockElement === canvas) {
+          document.exitPointerLock();
+        }
+        togglePauseMenu(!isPaused);
+      }
     });
-  });
-}
 
-function addBoxCollider(cx,cz,w,d,topY){
-  colliders.push({minX:cx-w/2,maxX:cx+w/2,minZ:cz-d/2,maxZ:cz+d/2,topY});
-}
-function spawnWorldProp(typeId,x,y,z,rotY,isNpcHider=false){
-  const def=PROP_DEFS[typeId];
-  const mesh=createProp3DMesh(typeId);
-  mesh.position.set(x,y,z);mesh.rotation.y=rotY;worldGroup.add(mesh);
-  const propObj={typeId,def,mesh,x,y,z,rotY,isNpcHider};
-  mesh.traverse(c=>{if(c.isMesh)c.userData.propRef=propObj;});
-  propsList.push(propObj);
-  if(!isNpcHider&&def.walkableTop)addBoxCollider(x,z,1.3,1.3,y+def.height);
-  return propObj;
-}
-function spawnStarCoin(){
-  const x=(Math.random()-0.5)*(ARENA_HALF*1.7),z=(Math.random()-0.5)*(ARENA_HALF*1.7);
-  const coin=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,0.14,16),new THREE.MeshStandardMaterial({color:0xfacc15,emissive:0xca8a04,emissiveIntensity:0.5}));
-  coin.rotation.x=Math.PI/2;coin.position.set(x,0.85,z);worldGroup.add(coin);
-  coinsList.push({mesh:coin,x,y:0.85,z,bob:Math.random()*Math.PI*2});
-}
+    document.addEventListener("keyup", (e) => {
+      keys[e.code] = false;
+    });
 
-// ==========================================
-// ゲーム開始
-// ==========================================
-async function startGame(mode){
-  sound.init();
-  gameState.mode=mode;gameState.screen='playing';gameState.paused=false;
-  gameState.score=0;gameState.hp=3;gameState.invulnTimer=0;
-  gameState.stats={morphCount:0,tauntCount:0,coinsCollected:0,tagsMade:0,kills:0,deaths:0};
-
-  if(mode==='fps'){
-    gameState.fps.team = await assignBalancedTeam();
-    gameState.fps.hp = 100;gameState.fps.maxHp = 100;
-    gameState.fps.blueScore = 0;gameState.fps.redScore = 0;
-    gameState.fps.respawnTimer = 0;gameState.fps.ammo = gameState.fps.magSize;
-    gameState.fps.reloadTimer = 0;
-  }
-
-  build3DWorld(mode,false);
-
-  if(mode==='fps'){
-    const spawnZ = gameState.fps.team==='blue'?44:-44;
-    player.pos.set((Math.random()-0.5)*14, 0, spawnZ);
-    player.fpsYaw = gameState.fps.team==='blue'?0:Math.PI;
-    player.fpsPitch = 0;
-  } else {
-    player.pos.set(0,0,16);player.rotY=Math.PI;camCtrl.yaw=Math.PI;
-  }
-  player.vel.set(0,0,0);player.onGround=true;player.disguise=null;player.locked=false;player.skillCooldown=0;player.dashTimer=0;
-
-  rebuildPlayerMesh(false);
-
-  document.getElementById('title-screen').classList.add('hidden');
-  document.getElementById('title-screen').classList.remove('flex');
-  document.getElementById('result-screen').classList.add('hidden');
-  document.getElementById('hud-top').classList.remove('hidden');
-  document.getElementById('controls-overlay').classList.remove('hidden');
-  document.getElementById('fps-crosshair').style.display='none';
-  document.getElementById('fps-hud').style.display='none';
-  document.getElementById('hud-fps-teams').classList.add('hidden');document.getElementById('hud-fps-teams').classList.remove('flex');
-  document.getElementById('hud-fps-hp-box').classList.add('hidden');document.getElementById('hud-fps-hp-box').classList.remove('flex');
-  document.getElementById('btn-shoot-mobile').classList.add('hidden');
-  document.getElementById('reticle-container').classList.remove('hidden');
-  document.getElementById('btn-pause').classList.remove('hidden');
-
-  const modeBadge=document.getElementById('hud-mode-badge');
-  const phActions=document.getElementById('prophunt-runner-actions');
-  const disguiseBox=document.getElementById('hud-disguise-box');
-  const hpContainer=document.getElementById('hud-hp-container');
-
-  if(mode==='fps'){
-    const isBlue = gameState.fps.team==='blue';
-    modeBadge.textContent='チームFPS';modeBadge.className='px-2.5 py-0.5 rounded-lg text-xs font-black bg-indigo-500 text-white';
-    phActions.classList.add('hidden');disguiseBox.classList.add('hidden');hpContainer.classList.add('hidden');
-    document.getElementById('hud-fps-teams').classList.remove('hidden');document.getElementById('hud-fps-teams').classList.add('flex');
-    document.getElementById('hud-fps-hp-box').classList.remove('hidden');document.getElementById('hud-fps-hp-box').classList.add('flex');
-    document.getElementById('btn-shoot-mobile').classList.remove('hidden');
-    document.getElementById('reticle-container').style.display='none';
-    document.getElementById('fps-crosshair').style.display='block';
-    document.getElementById('fps-hud').style.display='flex';
-
-    const badge=document.getElementById('fps-team-badge');
-    badge.textContent = isBlue ? '🔵 BLUE TEAM（青チーム）' : '🔴 RED TEAM（赤チーム）';
-    badge.className = `px-3 py-1 rounded-full text-xs font-black text-white shadow-lg ${isBlue?'bg-sky-600':'bg-rose-600'}`;
-
-    gameState.timer=120.0;
-    document.getElementById('skill-icon').textContent='🔄';document.getElementById('skill-label').textContent='リロード';
-    updateFPSHUD();
-    showBanner(isBlue?'🔵 青チームに自動配属！':'🔴 赤チームに自動配属！','相手チームを倒してスコアを稼ごう！');
-  } else {
-    document.getElementById('reticle-container').style.display='flex';
-    hpContainer.classList.remove('hidden');
-    document.getElementById('skill-icon').textContent='💨';document.getElementById('skill-label').textContent='ダッシュ';
-    if(mode==='tag'){
-      modeBadge.textContent='3D 鬼ごっこ';modeBadge.className='px-2.5 py-0.5 rounded-lg text-xs font-black bg-rose-500 text-white';
-      phActions.classList.add('hidden');disguiseBox.classList.add('hidden');
-      gameState.timer=60.0;
-      if(gameState.tagRole==='runner'){
-        [[-45,-45],[45,-45]].forEach((st,i)=>seekersList.push(createAISeeker(st[0],st[1],i)));
-        showBanner('3D 鬼ごっこスタート！','60秒逃げ切れ！');
+    function togglePauseMenu(open) {
+      isPaused = open;
+      if (open) {
+        // 背景ぼかしクラスは一切付けず、透明オーバーレイのみ表示
+        pauseOverlay.classList.remove("hidden");
+        crosshair.classList.add("hidden");
       } else {
-        for(let i=0;i<6;i++)runnersList.push(createAIRunner((Math.random()-0.5)*80,(Math.random()-0.5)*80,i));
-        showBanner('あなたは鬼だ！','逃走者を捕まえろ！');
-      }
-    } else {
-      modeBadge.textContent='3D 変身かくれんぼ';modeBadge.className='px-2.5 py-0.5 rounded-lg text-xs font-black bg-emerald-500 text-slate-950';
-      phActions.classList.remove('hidden');phActions.classList.add('flex');
-      disguiseBox.classList.remove('hidden');disguiseBox.classList.add('flex');
-      gameState.timer=60.0;updateDisguiseHUD();
-      showBanner('3D 変身かくれんぼ！','モノに照準を合わせて[E]で変身しよう！');
-    }
-  }
-
-  updateHeartsHUD();sound.startBGM(mode);gameState.lastTime=performance.now();
-  startMultiplayerSync();enterPlayingMode();
-}
-
-function rebuildPlayerMesh(isSeeker){
-  if(player.mesh)worldGroup.remove(player.mesh);
-  if(gameState.mode==='prophunt'&&player.disguise){
-    player.mesh=createProp3DMesh(player.disguise.id);
-    player.radius=player.disguise.radius;player.height=player.disguise.height;camCtrl.targetDist=player.disguise.camDist;
-  } else {
-    const team = gameState.mode==='fps'?gameState.fps.team:null;
-    player.mesh=createCharacterMesh(isSeeker?0xe11d48:0x0ea5e9,isSeeker,team);
-    player.radius=0.48;player.height=1.7;camCtrl.targetDist=6.2;
-  }
-  player.mesh.position.copy(player.pos);player.mesh.rotation.y=player.rotY;worldGroup.add(player.mesh);
-
-  if(player.weaponMesh){worldGroup.remove(player.weaponMesh);player.weaponMesh=null;}
-  if(gameState.mode==='fps'){
-    player.weaponMesh=createWeaponMesh(gameState.fps.team);
-    worldGroup.add(player.weaponMesh);player.mesh.visible=false;
-  } else {
-    player.mesh.visible=true;
-  }
-}
-
-function createWeaponMesh(team='blue'){
-  const g=new THREE.Group();
-  const accentHex = team==='red'?0xf43f5e:0x38bdf8;
-  const bodyMat=new THREE.MeshStandardMaterial({color:0x1e293b,roughness:0.4,metalness:0.7});
-  const accentMat=new THREE.MeshStandardMaterial({color:accentHex,emissive:accentHex,emissiveIntensity:0.6});
-  const receiver=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.14,0.55),bodyMat);g.add(receiver);
-  const barrel=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,0.45,10),bodyMat);
-  barrel.rotation.x=Math.PI/2;barrel.position.set(0,0.02,-0.48);g.add(barrel);
-  const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.04,0.35),accentMat);
-  stripe.position.set(0,0.05,-0.05);g.add(stripe);
-  const flash=new THREE.Mesh(new THREE.SphereGeometry(0.14,8,8),new THREE.MeshBasicMaterial({color:0xffd166,transparent:true,opacity:0}));
-  flash.position.set(0,0.02,-0.75);g.add(flash);
-  g.userData.muzzleFlash=flash;
-  return g;
-}
-
-function createAISeeker(x,z,idx){
-  const mesh=createCharacterMesh(0xe11d48,true);mesh.position.set(x,0,z);worldGroup.add(mesh);
-  attachNametag(mesh,`鬼 AI #${idx+1}`);
-  return {id:idx,mesh,pos:new THREE.Vector3(x,0,z),vel:new THREE.Vector3(),rotY:0,radius:0.52,baseSpeed:7.5,targetPos:new THREE.Vector3(x,0,z),patrolTimer:0,moveSpeed:0};
-}
-function createAIRunner(x,z,idx){
-  const mesh=createCharacterMesh(0x38bdf8,false);mesh.position.set(x,0,z);worldGroup.add(mesh);
-  attachNametag(mesh,`Runner_${idx+1}`);
-  return {id:idx,mesh,pos:new THREE.Vector3(x,0,z),vel:new THREE.Vector3(),rotY:0,radius:0.46,speed:8.0,wanderTimer:0,targetRotY:0,caught:false,moveSpeed:0};
-}
-
-// ==========================================
-// アクション＆FPS射撃
-// ==========================================
-function triggerMorph(){
-  if(gameState.screen!=='playing'||gameState.paused||gameState.mode!=='prophunt'||gameState.phRole!=='hider')return;
-  if(player.targetedProp){
-    player.disguise=player.targetedProp.def;player.lockedRotY=player.targetedProp.rotY;
-    gameState.stats.morphCount++;gameState.score+=60;sound.playMorph();
-    rebuildPlayerMesh(false);spawn3DBurst(player.pos.x,player.pos.y+0.7,player.pos.z,0x34d399,16);
-    pushToast(`✨ 「${player.disguise.name}」に変身！`,'text-emerald-300');updateDisguiseHUD();
-  } else if(player.disguise){
-    player.disguise=null;player.locked=false;sound.playMorph();rebuildPlayerMesh(false);updateDisguiseHUD();
-  }
-}
-
-function triggerLock(){
-  if(gameState.screen!=='playing'||gameState.paused||gameState.mode!=='prophunt'||!player.disguise)return;
-  player.locked=!player.locked;
-  if(player.locked){player.lockedRotY=Math.round(player.rotY/(Math.PI/2))*(Math.PI/2);player.mesh.rotation.y=player.lockedRotY;}
-  sound.playLock(player.locked);updateLockHUD();
-}
-
-function triggerJump(){
-  if(gameState.screen!=='playing'||gameState.paused)return;
-  if(gameState.mode==='fps'&&gameState.fps.respawnTimer>0)return;
-  if(player.locked){player.locked=false;updateLockHUD();}
-  if(player.onGround){player.vel.y=player.jumpForce;player.onGround=false;sound.playJump();}
-}
-
-function triggerSkill(){
-  if(gameState.screen!=='playing'||gameState.paused)return;
-  if(gameState.mode==='fps'){
-    if(gameState.fps.reloadTimer<=0&&gameState.fps.ammo<gameState.fps.magSize){
-      gameState.fps.reloadTimer=1.1;sound.playReload();pushToast('🔄 リロード中...','text-amber-300');
-    }
-    return;
-  }
-  if(player.skillCooldown>0)return;
-  player.dashTimer=0.32;player.skillCooldown=player.skillMaxCooldown;sound.playDash();
-}
-
-function triggerTaunt(){
-  if(gameState.screen!=='playing'||gameState.paused||gameState.mode!=='prophunt'||player.tauntCooldown>0)return;
-  player.tauntCooldown=5.0;gameState.stats.tauntCount++;gameState.score+=250;sound.playTaunt();
-  pushToast('🎶 口笛アピール！ +250pt','text-amber-300');
-}
-
-function shootFPS(){
-  if(gameState.mode!=='fps'||gameState.screen!=='playing'||gameState.paused||gameState.fps.respawnTimer>0)return;
-  if(gameState.fps.fireCooldown>0||gameState.fps.reloadTimer>0)return;
-  if(gameState.fps.ammo<=0){triggerSkill();return;}
-
-  gameState.fps.ammo--;gameState.fps.fireCooldown=0.14;gameState.fps.recoil=0.045;
-  sound.playShot();updateFPSHUD();
-  if(player.weaponMesh?.userData.muzzleFlash)player.weaponMesh.userData.muzzleFlash.material.opacity=1;
-
-  const camDir=new THREE.Vector3();camera.getWorldDirection(camDir);
-  const startPos=camera.position.clone().addScaledVector(camDir,0.8);startPos.y-=0.12;
-
-  raycaster.setFromCamera(new THREE.Vector2(0,0),camera);raycaster.far=130;
-  let hitPoint=startPos.clone().addScaledVector(camDir,80);
-  let hitEnemy=null, isHeadshot=false, closestDist=130;
-
-  const worldHits=raycaster.intersectObjects(worldGroup.children,true);
-  for(const h of worldHits){
-    let isChar=false, p=h.object;
-    while(p){if(p.userData?.joints||p.userData?.isNametag||p===player.weaponMesh){isChar=true;break;}p=p.parent;}
-    if(!isChar&&h.distance<closestDist){closestDist=h.distance;hitPoint=h.point.clone();break;}
-  }
-
-  Object.values(remotePlayers).forEach(rp=>{
-    if(rp.mode!=='fps'||rp.team===gameState.fps.team||(rp.hp||0)<=0)return;
-    const res=checkRayHitCharacter(raycaster.ray,rp.mesh.position,closestDist);
-    if(res.hit){closestDist=res.dist;hitPoint=res.point;hitEnemy={type:'remote',target:rp};isHeadshot=res.headshot;}
-  });
-
-  fpsBots.forEach(bot=>{
-    if(bot.team===gameState.fps.team||bot.hp<=0)return;
-    const res=checkRayHitCharacter(raycaster.ray,bot.pos,closestDist);
-    if(res.hit){closestDist=res.dist;hitPoint=res.point;hitEnemy={type:'bot',target:bot};isHeadshot=res.headshot;}
-  });
-
-  spawnBulletTrail(startPos,hitPoint,gameState.fps.team==='blue'?0x38bdf8:0xf43f5e);
-
-  if(hitEnemy){
-    const dmg=isHeadshot?50:25;
-    const ch=document.getElementById('fps-crosshair');ch.classList.add('hit');setTimeout(()=>ch.classList.remove('hit'),120);
-    sound.playTargetHit();spawn3DBurst(hitPoint.x,hitPoint.y,hitPoint.z,isHeadshot?0xfacc15:0xf43f5e,14);
-    addFloatingSprite(hitPoint.x,hitPoint.y+0.4,hitPoint.z,isHeadshot?`HEAD -${dmg}!`:`-${dmg}`,isHeadshot?'#facc15':'#fb7185');
-    if(hitEnemy.type==='remote')sendHitEventToRemote(hitEnemy.target.uid,dmg,isHeadshot);
-    else damageFPSBot(hitEnemy.target,dmg,isHeadshot);
-  }
-}
-
-function checkRayHitCharacter(ray,charPos,maxDist){
-  const headCenter=new THREE.Vector3(charPos.x,charPos.y+2.1,charPos.z);
-  const headDist=ray.origin.distanceTo(headCenter);
-  if(headDist<maxDist&&ray.distanceSqToPoint(headCenter)<0.35*0.35)return{hit:true,headshot:true,dist:headDist,point:headCenter};
-  const bodyCenter=new THREE.Vector3(charPos.x,charPos.y+1.15,charPos.z);
-  const bodyDist=ray.origin.distanceTo(bodyCenter);
-  if(bodyDist<maxDist&&ray.distanceSqToPoint(bodyCenter)<0.65*0.65)return{hit:true,headshot:false,dist:bodyDist,point:bodyCenter};
-  return{hit:false};
-}
-
-function spawnBulletTrail(start,end,color){
-  const dist=start.distanceTo(end);if(dist<0.2)return;
-  const geom=new THREE.CylinderGeometry(0.03,0.03,dist,6);geom.rotateX(Math.PI/2);
-  const mesh=new THREE.Mesh(geom,new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.85}));
-  mesh.position.copy(start).lerp(end,0.5);mesh.lookAt(end);worldGroup.add(mesh);
-  fxList.push({mesh,life:0.12,maxLife:0.12,type:'beam'});
-}
-
-function damageFPSBot(bot,dmg,isHeadshot){
-  bot.hp=Math.max(0,bot.hp-dmg);
-  updateRobloxNametag(bot.mesh.userData.nametag,bot.name,bot.team,bot.hp,bot.maxHp);
-  if(bot.hp<=0){bot.deadTimer=3.0;bot.mesh.visible=false;onPlayerGotKill(bot.name,isHeadshot);}
-}
-
-function onPlayerGotKill(victimName,isHeadshot){
-  gameState.stats.kills++;gameState.score+=isHeadshot?150:100;sound.playKill();
-  if(gameState.fps.team==='blue')gameState.fps.blueScore++;else gameState.fps.redScore++;
-  pushToast(`⚔️ ${victimName} を撃破！ (+${isHeadshot?150:100}pt)`,'text-amber-300');
-  syncTeamScoresToRTDB();
-}
-
-function takePlayerDamage(dmg,attackerName='敵プレイヤー'){
-  if(gameState.mode!=='fps'||gameState.fps.respawnTimer>0)return;
-  gameState.fps.hp=Math.max(0,gameState.fps.hp-dmg);sound.playHit();
-  const vig=document.getElementById('hit-vignette');vig.style.opacity='1';setTimeout(()=>{vig.style.opacity='0';},180);
-  if(gameState.fps.hp<=0){
-    gameState.stats.deaths++;gameState.fps.respawnTimer=3.0;
-    if(gameState.fps.team==='blue')gameState.fps.redScore++;else gameState.fps.blueScore++;
-    syncTeamScoresToRTDB();
-    showBanner('💀 やられた！',`${attackerName} に倒された！ 3秒後にリスポーン...`);
-  }
-}
-
-function respawnFPSPlayer(){
-  gameState.fps.hp=gameState.fps.maxHp;gameState.fps.ammo=gameState.fps.magSize;gameState.fps.reloadTimer=0;
-  player.pos.set((Math.random()-0.5)*16,0,gameState.fps.team==='blue'?44:-44);
-  player.vel.set(0,0,0);player.fpsYaw=gameState.fps.team==='blue'?0:Math.PI;
-  updateFPSHUD();pushToast('✨ リスポーン完了！','text-emerald-300');
-}
-
-function updateFPSHUD(){
-  document.getElementById('fps-ammo').innerHTML=`${gameState.fps.ammo} <small>/ ∞</small>`;
-}
-
-function addFloatingSprite(x,y,z,text,color){
-  const canvas=document.createElement('canvas');canvas.width=192;canvas.height=64;
-  const c=canvas.getContext('2d');
-  c.font='900 34px "M PLUS Rounded 1c", sans-serif';c.textAlign='center';c.textBaseline='middle';
-  c.lineWidth=6;c.strokeStyle='rgba(0,0,0,0.9)';c.strokeText(text,96,32);c.fillStyle=color;c.fillText(text,96,32);
-  const tex=new THREE.CanvasTexture(canvas);
-  const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
-  sprite.position.set(x,y,z);sprite.scale.set(2.2,0.75,1);worldGroup.add(sprite);
-  fxList.push({mesh:sprite,life:0.8,maxLife:0.8,type:'sprite',vy:2.0});
-}
-
-// ==========================================
-// 物理演算
-// ==========================================
-function getGroundHeightAt(x,z,radius,currentY){
-  let maxGround=0;
-  for(const c of colliders){
-    if(x+radius>c.minX&&x-radius<c.maxX&&z+radius>c.minZ&&z-radius<c.maxZ){
-      if(currentY>=c.topY-0.35)maxGround=Math.max(maxGround,c.topY);
-    }
-  }
-  return maxGround;
-}
-
-function resolveHorizontalCollisions(pos,radius,currentY){
-  const limit=ARENA_HALF-1.2-radius;
-  pos.x=Math.max(-limit,Math.min(limit,pos.x));pos.z=Math.max(-limit,Math.min(limit,pos.z));
-  for(const c of colliders){
-    if(currentY<c.topY-0.35){
-      const cx=Math.max(c.minX,Math.min(pos.x,c.maxX)),cz=Math.max(c.minZ,Math.min(pos.z,c.maxZ));
-      const dx=pos.x-cx,dz=pos.z-cz,dSq=dx*dx+dz*dz;
-      if(dSq<radius*radius){
-        const d=Math.sqrt(dSq)||0.001,ov=radius-d;
-        pos.x+=(dx/d)*ov;pos.z+=(dz/d)*ov;
+        pauseOverlay.classList.add("hidden");
+        if (isInGame) crosshair.classList.remove("hidden");
       }
     }
-  }
-}
 
-// ==========================================
-// Firebase Realtime Database オンライン同期
-// ==========================================
-let presenceTimer=null;
-let publishTimer=null;
-let unsubscribeRoom=null;
-let unsubscribeHits=null;
-let unsubscribeScores=null;
+    function requestPointerLockSafe() {
+      try {
+        if (canvas.requestPointerLock) {
+          canvas.requestPointerLock();
+        }
+      } catch (e) {}
+    }
 
-function startPresenceOnly(){
-  if(!APP.profile?.uid||!window.FB||!APP.ready)return;
-  const FB=window.FB;
-  const myUid=APP.profile.uid;
-  const presenceRef=FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/presence/${myUid}`);
-  try{FB.onDisconnect(presenceRef).remove();}catch(e){}
-
-  const writePresence=()=>{
-    if(!APP.profile?.uid)return;
-    FB.rtSet(presenceRef,{
-      uid:myUid,
-      username:APP.profile.username,
-      mode:gameState.screen==='playing'?gameState.mode:'lobby',
-      team:gameState.mode==='fps'?gameState.fps.team:null,
-      updatedAt:Date.now()
-    }).catch(()=>{});
-  };
-  writePresence();
-  if(presenceTimer)clearInterval(presenceTimer);
-  presenceTimer=setInterval(writePresence, 4000);
-
-  const presAllRef=FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/presence`);
-  FB.onValue(presAllRef,(snap)=>{
-    const val=snap.val()||{};
-    const now=Date.now();
-    const activeCount=Math.max(1, Object.values(val).filter(p=>(now-(p.updatedAt||0))<15000).length);
-    document.getElementById('hud-online-count').textContent=`オンライン: ${activeCount}人`;
-    document.getElementById('lobby-online-badge').textContent=`🌐 オンライン ${activeCount}人`;
-  });
-}
-
-function startMultiplayerSync(){
-  stopMultiplayerSync();
-  startPresenceOnly();
-  if(!APP.profile?.uid||!window.FB||!APP.ready)return;
-  const FB=window.FB;
-  const myUid=APP.profile.uid;
-  const myRef=FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players/${myUid}`);
-  try{FB.onDisconnect(myRef).remove();}catch(e){}
-
-  publishTimer=setInterval(()=>{
-    if(!APP.profile?.uid||gameState.screen!=='playing'||gameState.paused)return;
-    FB.rtSet(myRef,{
-      x:+player.pos.x.toFixed(2), y:+player.pos.y.toFixed(2), z:+player.pos.z.toFixed(2),
-      ry:+(gameState.mode==='fps'?player.fpsYaw:player.rotY).toFixed(2),
-      username:APP.profile.username,
-      disguise:player.disguise?.id ?? null,
-      mode:gameState.mode,
-      team:gameState.mode==='fps'?gameState.fps.team:null,
-      hp:gameState.mode==='fps'?gameState.fps.hp:100,
-      maxHp:100,
-      updatedAt:Date.now()
-    }).catch(()=>{});
-  },80);
-
-  const playersRef=FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/players`);
-  unsubscribeRoom=FB.onValue(playersRef,(snap)=>{
-    const data=snap.val()||{};
-    Object.keys(remotePlayers).forEach(uid=>{
-      if(!data[uid]||data[uid].mode!==gameState.mode){
-        const rp=remotePlayers[uid];
-        if(rp?.mesh)worldGroup.remove(rp.mesh);
-        delete remotePlayers[uid];
+    document.addEventListener("pointerlockchange", () => {
+      if (!isInGame) return;
+      if (document.pointerLockElement === canvas) {
+        togglePauseMenu(false);
+      } else {
+        // ESC等でPointerLockが外れた時は、背景をぼかさないメニューを開く
+        if (!resultOverlay.classList.contains("hidden")) return;
+        togglePauseMenu(true);
       }
     });
 
-    Object.entries(data).forEach(([uid,p])=>{
-      if(uid===myUid||gameState.screen!=='playing'||p.mode!==gameState.mode)return;
-      if(Date.now()-(p.updatedAt||0)>15000)return;
-
-      let rp=remotePlayers[uid];
-      if(!rp||rp.team!==p.team){
-        if(rp?.mesh)worldGroup.remove(rp.mesh);
-        const mesh=createCharacterMesh(0x38bdf8,false,p.team||null);
-        mesh.position.set(p.x,p.y,p.z);worldGroup.add(mesh);
-        attachNametag(mesh,p.username||'Player',p.team||null,p.hp??100,100);
-        rp={mesh,uid,targetPos:new THREE.Vector3(p.x,p.y,p.z),team:p.team,hp:p.hp??100,username:p.username};
-        remotePlayers[uid]=rp;
+    canvas.addEventListener("mousedown", (e) => {
+      if (!isInGame) return;
+      if (document.pointerLockElement !== canvas) {
+        requestPointerLockSafe();
+        togglePauseMenu(false);
+        return;
       }
-
-      rp.targetPos.set(p.x,p.y,p.z);
-      rp.hp=p.hp??100;
-      rp.username=p.username||'Player';
-      rp.mesh.visible=(rp.hp>0)&&!p.disguise;
-      if(rp.mesh.userData.nametag){
-        updateRobloxNametag(rp.mesh.userData.nametag,rp.username,rp.team,rp.hp,100);
+      if (e.button === 0) {
+        fireLocalWeapon();
       }
     });
-  });
 
-  if(gameState.mode==='fps'){
-    const myHitsRef=FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/hits/${myUid}`);
-    FB.rtRemove(myHitsRef).catch(()=>{});
-    unsubscribeHits=FB.onChildAdded(myHitsRef,(snap)=>{
-      const hit=snap.val();FB.rtRemove(snap.ref).catch(()=>{});
-      if(hit&&gameState.screen==='playing')takePlayerDamage(hit.dmg||25,hit.fromName||'敵プレイヤー');
-    });
-
-    const scoreRef=FB.rtRef(FB.rtdb,`rooms/${APP.roomId}/fpsScores`);
-    unsubscribeScores=FB.onValue(scoreRef,(snap)=>{
-      const sc=snap.val();
-      if(sc&&gameState.mode==='fps'){
-        gameState.fps.blueScore=Math.max(gameState.fps.blueScore,sc.blue||0);
-        gameState.fps.redScore=Math.max(gameState.fps.redScore,sc.red||0);
+    document.addEventListener("mousemove", (e) => {
+      if (!isInGame || isPaused) return;
+      if (document.pointerLockElement === canvas) {
+        const sens = 0.0022 * mouseSensitivity;
+        localPlayer.yaw -= e.movementX * sens;
+        localPlayer.pitch -= e.movementY * sens;
+        localPlayer.pitch = Math.max(-Math.PI * 0.47, Math.min(Math.PI * 0.47, localPlayer.pitch));
       }
     });
-  }
-}
 
-function sendHitEventToRemote(targetUid,dmg,isHeadshot){
-  if(!window.FB||!APP.ready||!APP.profile)return;
-  window.FB.rtPush(window.FB.rtRef(window.FB.rtdb,`rooms/${APP.roomId}/hits/${targetUid}`),{
-    fromUid:APP.profile.uid, fromName:APP.profile.username, dmg, isHeadshot, ts:Date.now()
-  }).catch(()=>{});
-  const rp=remotePlayers[targetUid];
-  if(rp&&(rp.hp-dmg)<=0)onPlayerGotKill(rp.username,isHeadshot);
-}
+    // タッチ視点操作＆モバイルボタン
+    let lastTouchX = null, lastTouchY = null;
+    canvas.addEventListener("touchstart", (e) => {
+      if (!isInGame) return;
+      const t = e.touches[0];
+      lastTouchX = t.clientX;
+      lastTouchY = t.clientY;
+    }, { passive: true });
 
-function syncTeamScoresToRTDB(){
-  if(!window.FB||!APP.ready)return;
-  window.FB.rtSet(window.FB.rtRef(window.FB.rtdb,`rooms/${APP.roomId}/fpsScores`),{
-    blue:gameState.fps.blueScore, red:gameState.fps.redScore, updatedAt:Date.now()
-  }).catch(()=>{});
-}
+    canvas.addEventListener("touchmove", (e) => {
+      if (!isInGame || lastTouchX === null) return;
+      const t = e.touches[0];
+      const dx = t.clientX - lastTouchX;
+      const dy = t.clientY - lastTouchY;
+      lastTouchX = t.clientX;
+      lastTouchY = t.clientY;
+      localPlayer.yaw -= dx * 0.005 * mouseSensitivity;
+      localPlayer.pitch = Math.max(-Math.PI * 0.47, Math.min(Math.PI * 0.47, localPlayer.pitch - dy * 0.005 * mouseSensitivity));
+    }, { passive: true });
 
-function stopMultiplayerSync(){
-  if(publishTimer){clearInterval(publishTimer);publishTimer=null;}
-  if(unsubscribeRoom){try{unsubscribeRoom();}catch(e){}unsubscribeRoom=null;}
-  if(unsubscribeHits){try{unsubscribeHits();}catch(e){}unsubscribeHits=null;}
-  if(unsubscribeScores){try{unsubscribeScores();}catch(e){}unsubscribeScores=null;}
-  if(APP.profile?.uid&&window.FB&&APP.ready){
-    window.FB.rtRemove(window.FB.rtRef(window.FB.rtdb,`rooms/${APP.roomId}/players/${APP.profile.uid}`)).catch(()=>{});
-  }
-}
-
-function updateRemotePlayers(dt){
-  Object.values(remotePlayers).forEach(rp=>{
-    if(!rp.mesh)return;
-    const px=rp.mesh.position.x,pz=rp.mesh.position.z;
-    rp.mesh.position.lerp(rp.targetPos,Math.min(1,dt*12));
-    const sp=Math.hypot(rp.mesh.position.x-px,rp.mesh.position.z-pz)/Math.max(0.001,dt);
-    if(sp>0.2)rp.mesh.rotation.y=Math.atan2(rp.mesh.position.x-px,rp.mesh.position.z-pz);
-    if(rp.mesh.userData.joints)animateCharacter(rp.mesh,dt,sp,true,performance.now()*0.001);
-  });
-}
-
-// ==========================================
-// 更新ループ
-// ==========================================
-function update(dt){
-  if(gameState.screen!=='playing'||gameState.paused)return;
-  gameState.timer-=dt;
-  if(player.skillCooldown>0)player.skillCooldown=Math.max(0,player.skillCooldown-dt);
-  if(player.dashTimer>0)player.dashTimer=Math.max(0,player.dashTimer-dt);
-  if(player.tauntCooldown>0)player.tauntCooldown=Math.max(0,player.tauntCooldown-dt);
-
-  if(gameState.mode==='fps'){
-    gameState.fps.fireCooldown=Math.max(0,gameState.fps.fireCooldown-dt);
-    if(gameState.fps.reloadTimer>0){
-      gameState.fps.reloadTimer-=dt;
-      if(gameState.fps.reloadTimer<=0){gameState.fps.ammo=gameState.fps.magSize;updateFPSHUD();}
+    function bindHoldButton(id, keyCode) {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      btn.addEventListener("touchstart", (e) => { e.preventDefault(); keys[keyCode] = true; });
+      btn.addEventListener("touchend", (e) => { e.preventDefault(); keys[keyCode] = false; });
     }
-    if(gameState.fps.respawnTimer>0){
-      gameState.fps.respawnTimer-=dt;
-      if(gameState.fps.respawnTimer<=0)respawnFPSPlayer();
+    bindHoldButton("btnTouchUp", "KeyW");
+    bindHoldButton("btnTouchDown", "KeyS");
+    bindHoldButton("btnTouchLeft", "KeyA");
+    bindHoldButton("btnTouchRight", "KeyD");
+    bindHoldButton("btnTouchJump", "Space");
+    document.getElementById("btnTouchFire").addEventListener("touchstart", (e) => { e.preventDefault(); fireLocalWeapon(); });
+    document.getElementById("btnTouchReload").addEventListener("touchstart", (e) => { e.preventDefault(); reloadLocalWeapon(); });
+
+    /* =========================================================================
+       10. HUD更新＆メインゲームループ
+       ========================================================================= */
+    function updateHpHud() {
+      document.getElementById("hudHpText").textContent = `${localPlayer.hp} / ${localPlayer.maxHp}`;
+      document.getElementById("hudHpBar").style.width = `${(localPlayer.hp / localPlayer.maxHp) * 100}%`;
     }
-    updateFPSBots(dt);
-    if(gameState.timer<=0){
-      const win = gameState.fps.team==='blue'?gameState.fps.blueScore>=gameState.fps.redScore:gameState.fps.redScore>=gameState.fps.blueScore;
-      endGame(win);return;
+
+    function updateWeaponHud() {
+      document.getElementById("hudAmmo").textContent = localPlayer.ammo;
+      document.getElementById("hudReloadText").textContent = "左クリック: 射撃 / R: リロード";
     }
-  } else if(gameState.timer<=0){
-    endGame(true);return;
-  }
 
-  let fi=0,ri=0;
-  if(keys['KeyW']||keys['ArrowUp'])fi+=1;
-  if(keys['KeyS']||keys['ArrowDown'])fi-=1;
-  if(keys['KeyD']||keys['ArrowRight'])ri+=1;
-  if(keys['KeyA']||keys['ArrowLeft'])ri-=1;
-  if(joystick.active){fi=-joystick.dy;ri=joystick.dx;}
-  const mag=Math.hypot(fi,ri);if(mag>1){fi/=mag;ri/=mag;}
-
-  let currentMoveSpeed=0;
-  const canMove=!player.locked&&!(gameState.mode==='fps'&&gameState.fps.respawnTimer>0);
-  if(canMove){
-    const yawForMove=gameState.mode==='fps'?player.fpsYaw:camCtrl.yaw;
-    const camForward=new THREE.Vector3(-Math.sin(yawForMove),0,-Math.cos(yawForMove));
-    const camRight=new THREE.Vector3(Math.cos(yawForMove),0,-Math.sin(yawForMove));
-    const moveDir=new THREE.Vector3().addScaledVector(camForward,fi).addScaledVector(camRight,ri);
-    const spMult=player.dashTimer>0?1.95:1.0;
-    player.vel.x+=(moveDir.x*player.speed*spMult-player.vel.x)*Math.min(1,dt*14);
-    player.vel.z+=(moveDir.z*player.speed*spMult-player.vel.z)*Math.min(1,dt*14);
-    currentMoveSpeed=Math.hypot(player.vel.x,player.vel.z);
-    if(currentMoveSpeed>0.4&&gameState.mode!=='fps')player.rotY=lerpAngle(player.rotY,Math.atan2(player.vel.x,player.vel.z),dt*14);
-  } else {player.vel.x=0;player.vel.z=0;}
-
-  player.vel.y-=28.0*dt;
-  player.pos.x+=player.vel.x*dt;player.pos.z+=player.vel.z*dt;player.pos.y+=player.vel.y*dt;
-  resolveHorizontalCollisions(player.pos,player.radius,player.pos.y);
-  const groundY=getGroundHeightAt(player.pos.x,player.pos.z,player.radius,player.pos.y);
-  if(player.pos.y<=groundY){player.pos.y=groundY;player.vel.y=0;player.onGround=true;}
-  else player.onGround=false;
-
-  for(const jp of jumpPads){
-    if(Math.hypot(player.pos.x-jp.x,player.pos.z-jp.z)<jp.radius&&Math.abs(player.pos.y-0.1)<0.5){
-      player.vel.y=18.5;player.onGround=false;sound.playSpring();
+    function addKillFeedItem(killer, victim) {
+      const feed = document.getElementById("killFeed");
+      const item = document.createElement("div");
+      item.className = "px-3 py-1 rounded-lg bg-slate-950/85 border border-rose-500/40 text-slate-200 shadow";
+      item.innerHTML = `<span class="text-sky-400">${killer}</span> <span class="text-rose-400">⚔️</span> <span class="text-amber-300">${victim}</span>`;
+      feed.appendChild(item);
+      setTimeout(() => item.remove(), 4500);
     }
-  }
 
-  const time=performance.now()*0.001;
-  if(player.mesh?.userData.joints)animateCharacter(player.mesh,dt,currentMoveSpeed,player.onGround,time);
-  if(player.mesh&&gameState.mode!=='fps'){
-    player.mesh.position.copy(player.pos);player.mesh.rotation.y=player.locked?player.lockedRotY:player.rotY;
-  }
+    function updateScoreboardAndCounts() {
+      const humans = Object.values(serverPlayers);
+      const bots = Object.values(serverBots);
+      document.getElementById("hudHumanCount").textContent = humans.length;
+      document.getElementById("hudBotCount").textContent = bots.length;
 
-  if(gameState.mode==='prophunt'&&gameState.phRole==='hider')updateCrosshairTarget();
-  updateAISeekers(dt);updateAIRunners(dt);updateRemotePlayers(dt);
+      const combined = [
+        ...humans.map(p => ({ name: p.name, score: p.score || 0, isBot: false, isMe: p.uid === myUid })),
+        ...bots.map(b => ({ name: b.name, score: b.score || 0, isBot: true, isMe: false }))
+      ].sort((a, b) => b.score - a.score);
 
-  if(gameState.mode==='fps')updateFPSCamera();
-  else updateTPSCamera(dt);
-
-  update3DFX(dt);updateHUD();
-
-  if(gameState.mode==='fps'&&player.weaponMesh){
-    const camDir=new THREE.Vector3();camera.getWorldDirection(camDir);
-    const right=new THREE.Vector3().crossVectors(camDir,camera.up).normalize();
-    const wPos=camera.position.clone().addScaledVector(camDir,0.55).addScaledVector(right,0.28);wPos.y-=0.22;
-    player.weaponMesh.position.copy(wPos);player.weaponMesh.quaternion.copy(camera.quaternion);player.weaponMesh.rotateY(Math.PI);
-    if(gameState.fps.recoil>0){player.weaponMesh.position.y+=gameState.fps.recoil;gameState.fps.recoil=Math.max(0,gameState.fps.recoil-dt*0.3);}
-    const flash=player.weaponMesh.userData.muzzleFlash;
-    if(flash&&flash.material.opacity>0)flash.material.opacity=Math.max(0,flash.material.opacity-dt*14);
-  }
-}
-
-function updateFPSBots(dt){
-  const time=performance.now()*0.001;
-  fpsBots.forEach(bot=>{
-    if(bot.deadTimer>0){
-      bot.deadTimer-=dt;
-      if(bot.deadTimer<=0){
-        bot.hp=bot.maxHp;bot.pos.set((Math.random()-0.5)*20,0,bot.team==='blue'?40:-40);
-        bot.mesh.visible=true;updateRobloxNametag(bot.mesh.userData.nametag,bot.name,bot.team,bot.hp,bot.maxHp);
-      }
-      return;
+      const listEl = document.getElementById("hudScoreList");
+      listEl.innerHTML = combined.slice(0, 8).map(entry => `
+        <div class="flex justify-between items-center ${entry.isMe ? 'text-sky-300 font-black' : (entry.isBot ? 'text-amber-300/90' : 'text-slate-200')}">
+          <span class="truncate max-w-[155px]">${entry.isBot ? '🤖' : '👤'} ${entry.name}</span>
+          <span class="font-mono">${entry.score}</span>
+        </div>
+      `).join("");
     }
-    bot.moveTimer-=dt;
-    if(bot.moveTimer<=0){bot.moveTimer=2.5+Math.random()*2;bot.targetPos.set((Math.random()-0.5)*70,0,(Math.random()-0.5)*70);}
-    const dir=new THREE.Vector3().subVectors(bot.targetPos,bot.pos);dir.y=0;
-    if(dir.length()>1){dir.normalize();bot.vel.x+=(dir.x*6.5-bot.vel.x)*Math.min(1,dt*4);bot.vel.z+=(dir.z*6.5-bot.vel.z)*Math.min(1,dt*4);}
-    bot.pos.x+=bot.vel.x*dt;bot.pos.z+=bot.vel.z*dt;
-    resolveHorizontalCollisions(bot.pos,0.48,0);
-    bot.moveSpeed=Math.hypot(bot.vel.x,bot.vel.z);
-    if(bot.moveSpeed>0.4)bot.rotY=lerpAngle(bot.rotY,Math.atan2(bot.vel.x,bot.vel.z),dt*8);
-    bot.mesh.position.copy(bot.pos);bot.mesh.rotation.y=bot.rotY;
-    animateCharacter(bot.mesh,dt,bot.moveSpeed,true,time);
 
-    if(bot.team!==gameState.fps.team&&gameState.fps.respawnTimer<=0&&bot.pos.distanceTo(player.pos)<28){
-      bot.rotY=Math.atan2(player.pos.x-bot.pos.x,player.pos.z-bot.pos.z);bot.mesh.rotation.y=bot.rotY;
-      bot.shootTimer-=dt;
-      if(bot.shootTimer<=0){
-        bot.shootTimer=1.6+Math.random();
-        spawnBulletTrail(bot.pos.clone().add(new THREE.Vector3(0,1.5,0)),player.pos.clone().add(new THREE.Vector3(0,1.3,0)),bot.team==='blue'?0x38bdf8:0xf43f5e);
-        if(Math.random()<0.3)takePlayerDamage(12,bot.name);
+    function checkMatchTimer() {
+      if (!serverMeta || !isInGame) return;
+      const now = getServerNow();
+      const endTime = serverMeta.endTime || (serverMeta.startTime + MATCH_DURATION_MS);
+      const remainMs = Math.max(0, endTime - now);
+
+      const totalSec = Math.ceil(remainMs / 1000);
+      const mins = String(Math.floor(totalSec / 60)).padStart(2, "0");
+      const secs = String(totalSec % 60).padStart(2, "0");
+      document.getElementById("hudTimer").textContent = `${mins}:${secs}`;
+
+      if (remainMs <= 0) {
+        finishMatch();
       }
     }
-  });
-}
 
-function updateFPSCamera(){
-  const eyeY=gameState.fps.respawnTimer>0?8.0:player.pos.y+1.55;
-  camera.position.set(player.pos.x,eyeY,player.pos.z);
-  const d=new THREE.Vector3(-Math.sin(player.fpsYaw)*Math.cos(player.fpsPitch),Math.sin(player.fpsPitch),-Math.cos(player.fpsYaw)*Math.cos(player.fpsPitch));
-  camera.lookAt(player.pos.x+d.x,eyeY+d.y,player.pos.z+d.z);
-}
+    function finishMatch() {
+      if (!isInGame) return;
+      isInGame = false;
+      if (document.pointerLockElement === canvas) {
+        try { document.exitPointerLock(); } catch (e) {}
+      }
+      pauseOverlay.classList.add("hidden");
+      crosshair.classList.add("hidden");
 
-function updateCrosshairTarget(){
-  const promptEl=document.getElementById('target-prompt'),promptText=document.getElementById('target-prompt-text');
-  raycaster.setFromCamera(new THREE.Vector2(0,0),camera);raycaster.far=12;
-  let found=null;
-  for(const h of raycaster.intersectObjects(worldGroup.children,true)){
-    const ref=h.object.userData.propRef;
-    if(ref&&!ref.isNpcHider){found=ref;break;}
-  }
-  player.targetedProp=found;
-  if(found){promptText.textContent=`${found.def.name} に変身する`;promptEl.classList.remove('opacity-0');}
-  else promptEl.classList.add('opacity-0');
-}
+      const humans = Object.values(serverPlayers);
+      const bots = Object.values(serverBots);
+      const all = [
+        ...humans.map(p => ({ name: p.name, score: p.score || 0, isBot: false })),
+        ...bots.map(b => ({ name: b.name, score: b.score || 0, isBot: true }))
+      ].sort((a, b) => b.score - a.score);
 
-function updateAISeekers(dt){
-  seekersList.forEach(s=>{
-    const dist=s.pos.distanceTo(player.pos);
-    s.patrolTimer-=dt;
-    if(s.patrolTimer<=0){s.patrolTimer=2+Math.random()*2;s.targetPos.set((Math.random()-0.5)*80,0,(Math.random()-0.5)*80);}
-    const target=dist<22?player.pos:s.targetPos;
-    const dir=new THREE.Vector3().subVectors(target,s.pos);dir.y=0;if(dir.length()>0.2)dir.normalize();
-    s.vel.x+=(dir.x*s.baseSpeed-s.vel.x)*Math.min(1,dt*5);s.vel.z+=(dir.z*s.baseSpeed-s.vel.z)*Math.min(1,dt*5);
-    s.pos.x+=s.vel.x*dt;s.pos.z+=s.vel.z*dt;resolveHorizontalCollisions(s.pos,s.radius,0);
-    s.mesh.position.copy(s.pos);s.mesh.rotation.y=Math.atan2(s.vel.x,s.vel.z);
-    if(dist<1.6&&gameState.invulnTimer<=0&&gameState.mode==='tag'){
-      gameState.hp--;gameState.invulnTimer=1.5;sound.playHit();updateHeartsHUD();
-      if(gameState.hp<=0)endGame(false);
+      const top = all[0];
+      document.getElementById("resultWinnerTitle").textContent = top ? `🏆 勝者: ${top.name} (${top.score} pts)` : "試合終了！";
+      document.getElementById("resultScoreBoard").innerHTML = all.map((r, i) => `
+        <div class="flex justify-between items-center py-1 border-b border-slate-800/80">
+          <span>#${i + 1} ${r.isBot ? '🤖' : '👤'} <strong>${r.name}</strong></span>
+          <span class="font-mono text-sky-400 font-bold">${r.score} pts</span>
+        </div>
+      `).join("");
+
+      resultOverlay.classList.remove("hidden");
+
+      const oldServerId = currentServerId;
+      if (isHost && oldServerId) {
+        remove(ref(db, `onlineGameServers/${oldServerId}`)).catch(() => {});
+      }
+
+      setTimeout(() => {
+        if (!resultOverlay.classList.contains("hidden")) {
+          joinOnlineMatch(selectedMode);
+        }
+      }, 6000);
     }
-  });
-}
 
-function updateAIRunners(dt){
-  runnersList.forEach(r=>{
-    if(r.caught)return;
-    r.wanderTimer-=dt;if(r.wanderTimer<=0){r.wanderTimer=2;r.targetRotY=Math.random()*Math.PI*2;}
-    r.vel.x+=(Math.sin(r.targetRotY)*r.speed*0.6-r.vel.x)*Math.min(1,dt*3);r.vel.z+=(Math.cos(r.targetRotY)*r.speed*0.6-r.vel.z)*Math.min(1,dt*3);
-    r.pos.x+=r.vel.x*dt;r.pos.z+=r.vel.z*dt;resolveHorizontalCollisions(r.pos,r.radius,0);
-    r.mesh.position.copy(r.pos);r.mesh.rotation.y=Math.atan2(r.vel.x,r.vel.z);
-    if(gameState.tagRole==='seeker'&&player.pos.distanceTo(r.pos)<1.6){r.caught=true;worldGroup.remove(r.mesh);gameState.score+=200;sound.playCoin();}
-  });
-}
+    let lastFrameTime = performance.now();
+    let lastNetSyncTime = 0;
 
-function lerpAngle(a,b,t){let d=b-a;while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)d+=Math.PI*2;return a+d*Math.min(1,t);}
+    function gameLoop(now) {
+      requestAnimationFrame(gameLoop);
+      const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+      lastFrameTime = now;
 
-function spawn3DBurst(x,y,z,color,count=12){
-  for(let i=0;i<count;i++){
-    const s=new THREE.Mesh(new THREE.SphereGeometry(0.08,6,6),new THREE.MeshBasicMaterial({color,transparent:true,opacity:1}));
-    s.position.set(x,y,z);worldGroup.add(s);
-    const a=Math.random()*Math.PI*2,sp=3+Math.random()*4;
-    fxList.push({mesh:s,life:0.5,maxLife:0.5,type:'particle',vx:Math.cos(a)*sp,vy:3+Math.random()*3,vz:Math.sin(a)*sp});
-  }
-}
+      updateTracers(dt);
 
-function update3DFX(dt){
-  for(let i=fxList.length-1;i>=0;i--){
-    const f=fxList[i];f.life-=dt;
-    if(f.life<=0){worldGroup.remove(f.mesh);if(f.mesh.material.map)f.mesh.material.map.dispose();f.mesh.material.dispose();fxList.splice(i,1);continue;}
-    const t=f.life/f.maxLife;
-    if(f.type==='particle'){f.mesh.position.x+=f.vx*dt;f.mesh.position.y+=f.vy*dt;f.mesh.position.z+=f.vz*dt;f.vy-=18*dt;f.mesh.material.opacity=t;}
-    else if(f.type==='sprite'){f.mesh.position.y+=f.vy*dt;f.mesh.material.opacity=t;}
-    else if(f.type==='beam'){f.mesh.material.opacity=t*0.85;}
-  }
-}
+      // 他プレイヤー＆Botの補間移動
+      Object.values(remoteMeshes).forEach((m) => {
+        m.group.position.lerp(m.targetPos, Math.min(1, dt * 14));
+        m.group.rotation.y = m.targetYaw;
+      });
 
-// ==========================================
-// HUD・入力・終了
-// ==========================================
-function updateHUD(){
-  document.getElementById('hud-timer').textContent=Math.max(0,gameState.timer).toFixed(1);
-  document.getElementById('hud-score').textContent=Math.round(gameState.score).toLocaleString();
-  if(gameState.mode==='fps'){
-    document.getElementById('hud-blue-score').textContent=gameState.fps.blueScore;
-    document.getElementById('hud-red-score').textContent=gameState.fps.redScore;
-    document.getElementById('hud-fps-hp-text').textContent=gameState.fps.hp;
-    const ratio=Math.max(0,gameState.fps.hp/gameState.fps.maxHp);
-    const bar=document.getElementById('hud-fps-hp-bar');
-    bar.style.width=`${ratio*100}%`;
-    bar.className=`h-full transition-all duration-150 ${ratio>0.5?'bg-emerald-400':(ratio>0.25?'bg-amber-400':'bg-rose-500')}`;
-    document.getElementById('hud-phase-text').textContent=gameState.fps.team==='blue'?'🔵 BLUE TEAM':'🔴 RED TEAM';
-    document.getElementById('hud-role-sub').textContent=`KILL: ${gameState.stats.kills} / DEATH: ${gameState.stats.deaths}`;
-  }
-}
+      if (isInGame) {
+        checkMatchTimer();
+        manageServerBots(dt);
 
-function updateHeartsHUD(){
-  let s='';for(let i=0;i<gameState.maxHp;i++)s+=i<gameState.hp?'❤️':'🖤';
-  document.getElementById('hud-hearts').textContent=s;
-}
-function updateDisguiseHUD(){
-  document.getElementById('hud-disguise-icon').textContent=player.disguise?player.disguise.icon:'🏃';
-  document.getElementById('hud-disguise-name').textContent=player.disguise?player.disguise.name:'人間';
-}
-function updateLockHUD(){
-  document.getElementById('lock-icon').textContent=player.locked?'🔒':'🔓';
-  document.getElementById('lock-label').textContent=player.locked?'固定中':'角度固定';
-}
-function showBanner(title,sub){
-  const b=document.getElementById('center-banner');
-  document.getElementById('banner-title').textContent=title;document.getElementById('banner-sub').textContent=sub;
-  b.style.opacity='1';b.style.transform='translate(-50%,0) scale(1)';
-  clearTimeout(showBanner._t);showBanner._t=setTimeout(()=>{b.style.opacity='0';b.style.transform='translate(-50%,0) scale(0.9)';},2800);
-}
-function pushToast(text,cls='text-white'){
-  const feed=document.getElementById('toast-feed'),el=document.createElement('div');
-  el.className=`px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-black shadow-lg ${cls}`;
-  el.textContent=text;feed.appendChild(el);
-  setTimeout(()=>{el.style.opacity='0';el.style.transition='all .4s';},1400);
-  setTimeout(()=>el.remove(),1900);
-}
-function updateTPSCamera(dt){
-  camCtrl.dist+=(camCtrl.targetDist-camCtrl.dist)*Math.min(1,dt*6);
-  const ty=player.pos.y+(player.disguise?player.disguise.height*0.6:1.1);
-  camera.position.set(player.pos.x+camCtrl.dist*Math.sin(camCtrl.yaw)*Math.cos(camCtrl.pitch),ty+camCtrl.dist*Math.sin(camCtrl.pitch),player.pos.z+camCtrl.dist*Math.cos(camCtrl.yaw)*Math.cos(camCtrl.pitch));
-  camera.lookAt(player.pos.x,ty,player.pos.z);
-}
+        // リスポーン確認
+        if (localPlayer.hp <= 0 && localPlayer.deadUntil > 0 && getServerNow() >= localPlayer.deadUntil) {
+          localPlayer.hp = 100;
+          localPlayer.deadUntil = 0;
+          const sp = getSafeSpawnPoint();
+          localPlayer.x = sp.x;
+          localPlayer.y = 0;
+          localPlayer.z = sp.z;
+          updateHpHud();
+          showToast("リスポーンしました！");
+        }
 
-window.addEventListener('keydown',e=>{
-  keys[e.code]=true;
-  if(gameState.screen!=='playing'||gameState.paused)return;
-  if(e.code==='Space'){e.preventDefault();triggerJump();}
-  if(e.code==='KeyE'){e.preventDefault();triggerMorph();}
-  if(e.code==='KeyF'){e.preventDefault();triggerLock();}
-  if(e.code==='KeyR'||e.code==='ShiftLeft'||e.code==='ShiftRight'){e.preventDefault();triggerSkill();}
-  if(e.code==='KeyQ'){e.preventDefault();triggerTaunt();}
-});
-window.addEventListener('keyup',e=>{keys[e.code]=false;});
+        // 生存中の移動計算（サブステップ衝突で壁貫通ゼロ）
+        if (localPlayer.hp > 0) {
+          let forward = 0;
+          let strafe = 0;
+          if (keys["KeyW"] || keys["ArrowUp"]) forward += 1;
+          if (keys["KeyS"] || keys["ArrowDown"]) forward -= 1;
+          if (keys["KeyD"] || keys["ArrowRight"]) strafe += 1;
+          if (keys["KeyA"] || keys["ArrowLeft"]) strafe -= 1;
 
-renderer.domElement.addEventListener('touchstart',e=>{
-  if(gameState.screen!=='playing'||gameState.paused)return;
-  for(const t of e.changedTouches)if(t.clientX>window.innerWidth*0.35){camCtrl.touchId=t.identifier;camCtrl.lastX=t.clientX;camCtrl.lastY=t.clientY;}
-},{passive:true});
-renderer.domElement.addEventListener('touchmove',e=>{
-  if(gameState.screen!=='playing'||gameState.paused)return;
-  for(const t of e.changedTouches)if(t.identifier===camCtrl.touchId){
-    const dx=t.clientX-camCtrl.lastX,dy=t.clientY-camCtrl.lastY;camCtrl.lastX=t.clientX;camCtrl.lastY=t.clientY;
-    if(gameState.mode==='fps'){player.fpsYaw-=dx*0.004;player.fpsPitch=Math.max(-1.3,Math.min(1.3,player.fpsPitch-dy*0.004));}
-    else{camCtrl.yaw-=dx*0.008;camCtrl.pitch=Math.max(-0.2,Math.min(1.3,camCtrl.pitch+dy*0.008));}
-  }
-},{passive:true});
-renderer.domElement.addEventListener('touchend',e=>{
-  for(const t of e.changedTouches)if(t.identifier===camCtrl.touchId)camCtrl.touchId=null;
-},{passive:true});
+          const sinY = Math.sin(localPlayer.yaw);
+          const cosY = Math.cos(localPlayer.yaw);
+          let moveX = (-sinY * forward + cosY * strafe);
+          let moveZ = (-cosY * forward - sinY * strafe);
+          const len = Math.hypot(moveX, moveZ);
+          if (len > 0) {
+            moveX = (moveX / len) * MOVE_SPEED * dt;
+            moveZ = (moveZ / len) * MOVE_SPEED * dt;
+            moveEntityWithSubsteps(localPlayer, moveX, moveZ, PLAYER_RADIUS, PLAYER_HEIGHT);
+          }
 
-const joyZone=document.getElementById('joystick-zone'),joyKnob=document.getElementById('joystick-knob');
-joyZone.addEventListener('touchstart',e=>{e.preventDefault();const t=e.changedTouches[0];joystick.touchId=t.identifier;joystick.active=true;updateJoystick(t.clientX,t.clientY);},{passive:false});
-joyZone.addEventListener('touchmove',e=>{e.preventDefault();for(const t of e.changedTouches)if(t.identifier===joystick.touchId)updateJoystick(t.clientX,t.clientY);},{passive:false});
-joyZone.addEventListener('touchend',e=>{for(const t of e.changedTouches)if(t.identifier===joystick.touchId){joystick.active=false;joystick.dx=0;joystick.dy=0;joyKnob.style.transform='';}},{passive:false});
-function updateJoystick(cx,cy){
-  const rect=joyZone.getBoundingClientRect(),x=cx-rect.left-rect.width/2,y=cy-rect.top-rect.height/2,d=Math.hypot(x,y),max=rect.width/2-23;
-  joyKnob.style.transform=`translate(${x/Math.max(d,max)*max}px,${y/Math.max(d,max)*max}px)`;
-  joystick.dx=Math.max(-1,Math.min(1,x/max));joystick.dy=Math.max(-1,Math.min(1,y/max));
-}
+          if (keys["Space"] && localPlayer.onGround) {
+            localPlayer.vy = JUMP_SPEED;
+            localPlayer.onGround = false;
+          }
+          localPlayer.vy -= GRAVITY * dt;
+          localPlayer.y += localPlayer.vy * dt;
+          if (localPlayer.y <= 0) {
+            localPlayer.y = 0;
+            localPlayer.vy = 0;
+            localPlayer.onGround = true;
+          }
+        }
 
-document.getElementById('btn-jump').addEventListener('click',triggerJump);
-document.getElementById('btn-skill').addEventListener('click',triggerSkill);
-document.getElementById('btn-shoot-mobile').addEventListener('click',shootFPS);
-document.getElementById('btn-morph').addEventListener('click',triggerMorph);
-document.getElementById('btn-lock').addEventListener('click',triggerLock);
-document.getElementById('btn-taunt').addEventListener('click',triggerTaunt);
-document.getElementById('btn-sound').addEventListener('click',()=>{document.getElementById('btn-sound').textContent=sound.toggleMute()?'🔇':'🔊';});
-document.getElementById('btn-quit').addEventListener('click',()=>{if(confirm('ロビーに戻りますか？'))endGame(false,true);});
+        // カメラ位置と視線反映
+        camera.position.set(localPlayer.x, localPlayer.y + EYE_HEIGHT, localPlayer.z);
+        camera.rotation.order = "YXZ";
+        camera.rotation.y = localPlayer.yaw;
+        camera.rotation.x = localPlayer.pitch;
 
-document.querySelectorAll('.mode-tab').forEach(tab=>{
-  tab.addEventListener('click',()=>{
-    document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));
-    document.querySelectorAll('.lobby-panel').forEach(p=>p.classList.remove('active'));
-    tab.classList.add('active');
-    document.querySelector(`.lobby-panel[data-panel="${tab.dataset.mode}"]`).classList.add('active');
-    gameState.mode=tab.dataset.mode;
-  });
-});
+        // ネットワーク座標同期（約12Hz）
+        if (now - lastNetSyncTime > 80 && currentServerId && myUid) {
+          lastNetSyncTime = now;
+          update(ref(db, `onlineGameServers/${currentServerId}/players/${myUid}`), {
+            x: Number(localPlayer.x.toFixed(3)),
+            y: Number(localPlayer.y.toFixed(3)),
+            z: Number(localPlayer.z.toFixed(3)),
+            yaw: Number(localPlayer.yaw.toFixed(3)),
+            hp: localPlayer.hp,
+            score: localPlayer.score,
+            lastSeen: getServerNow()
+          }).catch(() => {});
+        }
+      } else {
+        // ロビー背景でのオートカメラ旋回
+        const t = now * 0.00025;
+        camera.position.set(Math.cos(t) * 32, 18, Math.sin(t) * 32);
+        camera.lookAt(0, 2, 0);
+      }
 
-document.getElementById('tag-role-runner').addEventListener('click',()=>{gameState.tagRole='runner';document.getElementById('tag-role-runner').classList.add('bg-sky-600','text-white');document.getElementById('tag-role-seeker').classList.remove('bg-rose-600','text-white');});
-document.getElementById('tag-role-seeker').addEventListener('click',()=>{gameState.tagRole='seeker';document.getElementById('tag-role-seeker').classList.add('bg-rose-600','text-white');document.getElementById('tag-role-runner').classList.remove('bg-sky-600','text-white');});
-document.getElementById('ph-role-hider').addEventListener('click',()=>{gameState.phRole='hider';document.getElementById('ph-role-hider').classList.add('bg-emerald-600','text-white');document.getElementById('ph-role-seeker').classList.remove('bg-rose-600','text-white');});
-document.getElementById('ph-role-seeker').addEventListener('click',()=>{gameState.phRole='seeker';document.getElementById('ph-role-seeker').classList.add('bg-rose-600','text-white');document.getElementById('ph-role-hider').classList.remove('bg-emerald-600','text-white');});
+      renderer.render(scene, camera);
+    }
 
-document.getElementById('start-fps-btn').addEventListener('click',()=>startGame('fps'));
-document.getElementById('start-tag-btn').addEventListener('click',()=>startGame('tag'));
-document.getElementById('start-prophunt-btn').addEventListener('click',()=>startGame('prophunt'));
-document.getElementById('btn-back-title').addEventListener('click',()=>{
-  document.getElementById('result-screen').classList.add('hidden');
-  document.getElementById('title-screen').classList.remove('hidden');document.getElementById('title-screen').classList.add('flex');
-  gameState.screen='title';stopMultiplayerSync();leavePlayingMode();
-});
-document.getElementById('btn-replay').addEventListener('click',()=>{document.getElementById('result-screen').classList.add('hidden');startGame(gameState.mode);});
+    /* =========================================================================
+       11. ロビー＆UIイベント配線
+       ========================================================================= */
+    const modeFpsBtn = document.getElementById("modeFpsBtn");
+    const modeHideBtn = document.getElementById("modeHideBtn");
 
-function endGame(win,quit=false){
-  if(gameState.screen!=='playing')return;
-  gameState.screen='result';gameState.paused=false;sound.stopBGM();stopMultiplayerSync();leavePlayingMode();
-  pauseOverlay.classList.remove('show');document.getElementById('btn-pause').classList.add('hidden');
-  if(win)sound.playWin();else if(!quit)sound.playLose();
+    modeFpsBtn.addEventListener("click", () => {
+      selectedMode = "fps";
+      modeFpsBtn.className = "mode-select-btn active p-3.5 rounded-2xl border-2 border-sky-500 bg-sky-950/50 text-left transition cursor-pointer";
+      modeHideBtn.className = "mode-select-btn p-3.5 rounded-2xl border-2 border-slate-700 bg-slate-950/70 text-left transition cursor-pointer";
+    });
 
-  const rs=document.getElementById('result-screen');
-  if(quit){
-    rs.classList.add('hidden');
-    document.getElementById('title-screen').classList.remove('hidden');document.getElementById('title-screen').classList.add('flex');
-    document.getElementById('hud-top').classList.add('hidden');document.getElementById('controls-overlay').classList.add('hidden');
-    document.getElementById('reticle-container').classList.add('hidden');document.getElementById('fps-crosshair').style.display='none';document.getElementById('fps-hud').style.display='none';
-    gameState.screen='title';return;
-  }
+    modeHideBtn.addEventListener("click", () => {
+      selectedMode = "hide";
+      modeHideBtn.className = "mode-select-btn active p-3.5 rounded-2xl border-2 border-amber-500 bg-amber-950/40 text-left transition cursor-pointer";
+      modeFpsBtn.className = "mode-select-btn p-3.5 rounded-2xl border-2 border-slate-700 bg-slate-950/70 text-left transition cursor-pointer";
+    });
 
-  document.getElementById('result-emoji').textContent=win?'🏆':'💀';
-  document.getElementById('result-title').textContent=win?'チーム勝利！':'敗北...';
-  document.getElementById('result-subtitle').textContent=gameState.mode==='fps'?`🔵 BLUE ${gameState.fps.blueScore} - ${gameState.fps.redScore} RED 🔴`:'お疲れ様でした！';
-  document.getElementById('result-score').textContent=`${Math.round(gameState.score).toLocaleString()} pt`;
-  document.getElementById('result-stats').innerHTML = gameState.mode==='fps' ? `
-    <div class="flex justify-between"><span class="text-slate-400">所属チーム</span><span class="font-black">${gameState.fps.team==='blue'?'🔵 BLUE TEAM':'🔴 RED TEAM'}</span></div>
-    <div class="flex justify-between"><span class="text-slate-400">キル数</span><span class="font-black text-emerald-400">${gameState.stats.kills}</span></div>
-    <div class="flex justify-between"><span class="text-slate-400">デス数</span><span class="font-black text-rose-400">${gameState.stats.deaths}</span></div>
-  ` : `<div class="flex justify-between"><span class="text-slate-400">スコア</span><span class="font-black">${Math.round(gameState.score)}</span></div>`;
+    document.getElementById("btnJoinOnlineServer").addEventListener("click", () => {
+      joinOnlineMatch(selectedMode);
+    });
 
-  document.getElementById('hud-top').classList.add('hidden');document.getElementById('controls-overlay').classList.add('hidden');
-  document.getElementById('reticle-container').classList.add('hidden');document.getElementById('fps-crosshair').style.display='none';document.getElementById('fps-hud').style.display='none';
-  rs.classList.remove('hidden');
-}
+    document.getElementById("btnResumeGame").addEventListener("click", () => {
+      togglePauseMenu(false);
+      requestPointerLockSafe();
+    });
 
-function loop(){
-  requestAnimationFrame(loop);
-  const now=performance.now(),dt=Math.min(0.05,(now-gameState.lastTime)/1000||0.016);
-  gameState.lastTime=now;update(dt);renderer.render(scene,camera);
-}
-loop();
-</script>
+    document.getElementById("sensSlider").addEventListener("input", (e) => {
+      mouseSensitivity = parseFloat(e.target.value) || 1.0;
+      document.getElementById("sensValText").textContent = mouseSensitivity.toFixed(1);
+    });
+
+    document.getElementById("btnLeaveMatch").addEventListener("click", () => {
+      leaveCurrentServer();
+      pauseOverlay.classList.add("hidden");
+      hudLayer.classList.add("hidden");
+      crosshair.classList.add("hidden");
+      lobbyOverlay.classList.remove("hidden");
+    });
+
+    document.getElementById("btnNextMatchNow").addEventListener("click", () => {
+      joinOnlineMatch(selectedMode);
+    });
+
+    // ロビーで現在のオンライン総人数をリアルタイム表示
+    onValue(ref(db, "onlineGameServers"), (snap) => {
+      let totalHumans = 0;
+      const now = getServerNow();
+      if (snap.exists()) {
+        snap.forEach((srv) => {
+          const players = srv.val()?.players || {};
+          Object.values(players).forEach((p) => {
+            if (p && p.lastSeen && (now - p.lastSeen) < 18000) totalHumans++;
+          });
+        });
+      }
+      document.getElementById("lobbyOnlineUsers").textContent = `${totalHumans} 人プレイ中`;
+    });
+
+    // 起動処理
+    window.onload = async function () {
+      document.getElementById("playerNameInput").value = myName;
+      buildStage("fps");
+      requestAnimationFrame(gameLoop);
+
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          myUid = user.uid;
+        }
+      });
+
+      try {
+        const cred = await signInAnonymously(auth);
+        myUid = cred.user.uid;
+      } catch (e) {
+        myUid = "anon_" + Math.random().toString(36).slice(2, 10);
+      }
+    };
+  </script>
 </body>
 </html>
