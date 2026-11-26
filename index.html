@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>3D 鬼ごっこ＆変身かくれんぼ＋チームFPS（オンライン完全版）</title>
+<title>3D 鬼ごっこ＆変身かくれんぼ＋チームFPS（完全オンライン版）</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap" rel="stylesheet">
@@ -37,11 +37,11 @@
   .glow-sky{animation:pulse-glow-sky 2s infinite;}
   @keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
   .animate-float{animation:float 3s ease-in-out infinite;}
-  /* ESCポーズ時：背景を一切ぼかさず、透明感を持たせて試合の様子が見えるようにする */
-  #pause-overlay{position:fixed;inset:0;z-index:60;background:rgba(2,6,23,.25);display:none;align-items:center;justify-content:center;padding:1rem;}
+  /* ESC押下時：背景をぼかさず、透明感を持たせて背後が見えるようにする */
+  #pause-overlay{position:fixed;inset:0;z-index:60;background:rgba(2,6,23,.22);display:none;align-items:center;justify-content:center;padding:1rem;}
   #pause-overlay.show{display:flex;}
   /* クリックヒントも背景ぼかしなし */
-  #click-hint{position:fixed;inset:0;z-index:55;display:none;align-items:center;justify-content:center;background:rgba(2,6,23,.15);pointer-events:none;}
+  #click-hint{position:fixed;inset:0;z-index:55;display:none;align-items:center;justify-content:center;background:rgba(2,6,23,.12);pointer-events:none;}
   #click-hint.show{display:flex;}
   #click-hint .box{pointer-events:none;animation:pulseHint 2s infinite;}
   @keyframes pulseHint{0%,100%{transform:scale(1);opacity:.92;}50%{transform:scale(1.04);opacity:1;}}
@@ -55,7 +55,7 @@
      style="background: radial-gradient(circle, transparent 52%, rgba(225,29,72,.6) 100%);"></div>
 <div id="hit-vignette"></div>
 
-<!-- 銃クロスヘア & 弾薬HUD（FPS＆かくれんぼ鬼側で使用） -->
+<!-- 銃クロスヘア & 弾薬HUD -->
 <div id="fps-crosshair" style="display:none;"><div class="hit-marker"></div></div>
 <div id="fps-hud">
   <div id="fps-team-badge" class="px-3 py-1 rounded-full text-xs font-black bg-sky-600 text-white shadow-lg">🔵 BLUE TEAM</div>
@@ -187,7 +187,7 @@
   </div>
 </div>
 
-<!-- ESCメニューオーバーレイ（背景ぼかし一切なし・透明背景で背後が見える） -->
+<!-- ESCメニューオーバーレイ（背景ぼかし一切なし） -->
 <div id="pause-overlay">
   <div class="bg-slate-900/90 border-2 border-amber-500/70 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl">
     <div class="text-3xl mb-2">⚙️</div>
@@ -204,7 +204,7 @@
   <div class="box px-8 py-5 rounded-2xl bg-slate-900/85 border-2 border-emerald-400/80 text-center shadow-2xl">
     <div class="text-3xl mb-2">🖱️</div>
     <div class="text-sm font-black text-emerald-300">画面をクリックしてマウス操作開始</div>
-    <div class="text-[10px] text-slate-300 mt-1">ESC キーでカーソル表示（背景はそのまま見えます）</div>
+    <div class="text-[10px] text-slate-300 mt-1">ESC キーでカーソル表示（背景はぼかしません）</div>
   </div>
 </div>
 
@@ -279,7 +279,7 @@
 
     <div class="text-center mb-4">
       <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-xs font-bold text-amber-400 mb-2 animate-float">
-        <span>🌐 広大170mステージ＆障害物大量増設</span><span>•</span><span>5分サーバーマッチ途中参加</span>
+        <span>🌐 広大220mステージ＆障害物大量増設</span><span>•</span><span>5分サーバーマッチ途中参加</span>
       </div>
       <h1 class="text-2xl sm:text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-amber-300 to-emerald-400 drop-shadow">3D 鬼ごっこ＆変身かくれんぼ＋FPS</h1>
     </div>
@@ -423,8 +423,8 @@ const STORAGE_KEY = 'dggm_online_session_v4';
 const MATCH_DURATION_SEC = 300; // 5分間のサーバー試合
 const HIDE_PHASE_SEC = 30;      // かくれんぼの隠れタイム30秒
 const SERVER_MAX_CAPACITY = 16; // 1サーバーあたりの定員（16人未満なら全員同一サーバーへ自動集約）
-const ARENA_HALF = 85;          // 広くなったステージ（170m x 170m）
-const VOID_ROOM_POS = { x: 0, y: 120, z: 260 }; // かくれんぼ30秒間、鬼が待機する別空間
+const ARENA_HALF = 110;         // 拡張された広大ステージ（220m x 220m）
+const VOID_ROOM_POS = { x: 0, y: 140, z: 320 }; // かくれんぼ30秒間、鬼が待機する別空間
 
 function loadSession(){
   try{
@@ -735,14 +735,15 @@ function roundRect(ctx, x, y, w, h, r){
   ctx.closePath();
 }
 
-function attachNametag(mesh, text, team=null, hp=100, maxHp=100){
+function attachNametag(mesh, text, team=null, hp=100, maxHp=100, yOffset=2.75){
   if(!mesh)return null;
   if(mesh.userData.nametag){
+    mesh.userData.nametag.position.set(0, yOffset, 0);
     updateRobloxNametag(mesh.userData.nametag, text, team, hp, maxHp);
     return mesh.userData.nametag;
   }
   const tag=createRobloxNametagSprite(text, team, hp, maxHp);
-  tag.position.set(0, 2.75, 0);mesh.add(tag);mesh.userData.nametag=tag;
+  tag.position.set(0, yOffset, 0);mesh.add(tag);mesh.userData.nametag=tag;
   return tag;
 }
 
@@ -752,9 +753,9 @@ function attachNametag(mesh, text, team=null, hp=100, maxHp=100){
 const container=document.getElementById('canvas-container');
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x0b132b);
-scene.fog=new THREE.FogExp2(0x0b132b,0.0045);
+scene.fog=new THREE.FogExp2(0x0b132b,0.0035);
 
-const camera=new THREE.PerspectiveCamera(65,window.innerWidth/window.innerHeight,0.1,500);
+const camera=new THREE.PerspectiveCamera(65,window.innerWidth/window.innerHeight,0.1,600);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
 renderer.setSize(window.innerWidth,window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
@@ -763,9 +764,9 @@ container.appendChild(renderer.domElement);
 
 scene.add(new THREE.HemisphereLight(0xa5b4fc,0x1e293b,0.9));
 const dirLight=new THREE.DirectionalLight(0xfffbeb,1.2);
-dirLight.position.set(50,80,45);dirLight.castShadow=true;
+dirLight.position.set(60,95,55);dirLight.castShadow=true;
 dirLight.shadow.mapSize.width=2048;dirLight.shadow.mapSize.height=2048;
-const sr=95;
+const sr=115;
 dirLight.shadow.camera.left=-sr;dirLight.shadow.camera.right=sr;dirLight.shadow.camera.top=sr;dirLight.shadow.camera.bottom=-sr;
 scene.add(dirLight);
 
@@ -797,7 +798,7 @@ const gameState={
 const camCtrl={yaw:0,pitch:0.38,dist:6.2,targetDist:6.2,lastX:0,lastY:0,touchId:null};
 
 const player={
-  pos:new THREE.Vector3(0,0,16),vel:new THREE.Vector3(0,0,0),
+  pos:new THREE.Vector3(0,0,18),vel:new THREE.Vector3(0,0,0),
   rotY:0,radius:0.48,height:1.7,onGround:true,
   speed:9.6,jumpForce:11.8,skillCooldown:0,skillMaxCooldown:2.8,
   dashTimer:0,tauntCooldown:0,disguise:null,locked:false,lockedRotY:0,
@@ -1122,7 +1123,7 @@ function refreshLobbyMatchUI(){
 }
 
 // ==========================================
-// ワールド構築（広大な170mステージ＆全モード障害物大量増設）
+// ワールド構築（広大な220mステージ＆全モード障害物大量増設）
 // ==========================================
 function build3DWorld(mode){
   scene.remove(worldGroup);
@@ -1145,11 +1146,11 @@ function build3DWorld(mode){
     return;
   }
 
-  // 広大な公園ステージ（170m x 170m）
+  // 広大な公園ステージ（220m x 220m）
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(ARENA_HALF*2,ARENA_HALF*2),new THREE.MeshStandardMaterial({color:0x14532d,roughness:0.9}));
   ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;worldGroup.add(ground);
 
-  const plaza=new THREE.Mesh(new THREE.CylinderGeometry(18,18,0.05,48),new THREE.MeshStandardMaterial({color:0x334155,roughness:0.7}));
+  const plaza=new THREE.Mesh(new THREE.CylinderGeometry(22,22,0.05,48),new THREE.MeshStandardMaterial({color:0x334155,roughness:0.7}));
   plaza.position.y=0.025;plaza.receiveShadow=true;worldGroup.add(plaza);
 
   const fenceMat=new THREE.MeshStandardMaterial({color:0x78350f,roughness:0.8});
@@ -1157,21 +1158,21 @@ function build3DWorld(mode){
     {x:0,z:-ARENA_HALF,w:ARENA_HALF*2+1,d:1.5},{x:0,z:ARENA_HALF,w:ARENA_HALF*2+1,d:1.5},
     {x:-ARENA_HALF,z:0,w:1.5,d:ARENA_HALF*2+1},{x:ARENA_HALF,z:0,w:1.5,d:ARENA_HALF*2+1}
   ].forEach(pw=>{
-    const m=new THREE.Mesh(new THREE.BoxGeometry(pw.w,4.5,pw.d),fenceMat);
-    m.position.set(pw.x,2.25,pw.z);m.castShadow=true;worldGroup.add(m);
+    const m=new THREE.Mesh(new THREE.BoxGeometry(pw.w,5.0,pw.d),fenceMat);
+    m.position.set(pw.x,2.5,pw.z);m.castShadow=true;worldGroup.add(m);
   });
 
-  // ジャンプパッド（広大なマップに8箇所）
+  // ジャンプパッド（広大な220mマップに12箇所）
   [
-    {x:-28,z:-40},{x:28,z:40},{x:-40,z:28},{x:40,z:-28},
-    {x:-60,z:0},{x:60,z:0},{x:0,z:-60},{x:0,z:60}
+    {x:-30,z:-45},{x:30,z:45},{x:-45,z:30},{x:45,z:-30},
+    {x:-75,z:0},{x:75,z:0},{x:0,z:-75},{x:0,z:75},
+    {x:-70,z:-70},{x:70,z:70},{x:-70,z:70},{x:70,z:-70}
   ].forEach(jp=>{
-    const pad=new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.7,0.24,18),
+    const pad=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.8,0.24,18),
       new THREE.MeshStandardMaterial({color:0x10b981,emissive:0x059669,emissiveIntensity:0.65}));
-    pad.position.set(jp.x,0.12,jp.z);worldGroup.add(pad);jumpPads.push({x:jp.x,z:jp.z,radius:1.7,mesh:pad});
+    pad.position.set(jp.x,0.12,jp.z);worldGroup.add(pad);jumpPads.push({x:jp.x,z:jp.z,radius:1.8,mesh:pad});
   });
 
-  // かくれんぼ用：鬼が30秒間待機する別空間（VOID_ROOM_POS）
   if(mode==='prophunt'){
     buildSeekerVoidRoom();
     buildPropHuntObstacles();
@@ -1184,14 +1185,14 @@ function build3DWorld(mode){
 function buildSeekerVoidRoom(){
   const vx = VOID_ROOM_POS.x, vy = VOID_ROOM_POS.y, vz = VOID_ROOM_POS.z;
   const roomFloor = new THREE.Mesh(
-    new THREE.BoxGeometry(28, 1, 28),
+    new THREE.BoxGeometry(30, 1, 30),
     new THREE.MeshStandardMaterial({color:0x1e1b4b,roughness:0.6,metalness:0.3})
   );
   roomFloor.position.set(vx, vy - 0.5, vz);
   worldGroup.add(roomFloor);
 
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(4, 5.2, 32),
+    new THREE.RingGeometry(4.5, 5.8, 32),
     new THREE.MeshBasicMaterial({color:0xf43f5e,side:THREE.DoubleSide})
   );
   ring.rotation.x = -Math.PI/2;
@@ -1200,8 +1201,8 @@ function buildSeekerVoidRoom(){
 
   const wallMat = new THREE.MeshStandardMaterial({color:0x312e81,roughness:0.5});
   [
-    {x:vx,z:vz-14,w:28,d:1},{x:vx,z:vz+14,w:28,d:1},
-    {x:vx-14,z:vz,w:1,d:28},{x:vx+14,z:vz,w:1,d:28}
+    {x:vx,z:vz-15,w:30,d:1},{x:vx,z:vz+15,w:30,d:1},
+    {x:vx-15,z:vz,w:1,d:30},{x:vx+15,z:vz,w:1,d:30}
   ].forEach(w=>{
     const wm = new THREE.Mesh(new THREE.BoxGeometry(w.w, 6, w.d), wallMat);
     wm.position.set(w.x, vy+3, w.z);
@@ -1209,7 +1210,7 @@ function buildSeekerVoidRoom(){
   });
 }
 
-// 鬼ごっこ用：障害物大幅増加
+// 鬼ごっこ用：障害物を大幅増設（220mマップ）
 function buildTagObstacles(){
   const addWall=(x,z,w,h,d,color)=>{
     const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:0.75}));
@@ -1217,38 +1218,47 @@ function buildTagObstacles(){
     addBoxCollider(x,z,w,d,h);
   };
 
-  // 中央＆リング状の障害物ウォール
-  addWall(0, 0, 5, 2.8, 5, 0x475569);
-  addWall(-22, 0, 2.5, 2.5, 18, 0x15803d);
-  addWall( 22, 0, 2.5, 2.5, 18, 0x15803d);
-  addWall(0, -22, 18, 2.5, 2.5, 0x15803d);
-  addWall(0,  22, 18, 2.5, 2.5, 0x15803d);
+  addWall(0, 0, 6, 3.0, 6, 0x475569);
+  addWall(-26, 0, 3.0, 2.8, 24, 0x15803d);
+  addWall( 26, 0, 3.0, 2.8, 24, 0x15803d);
+  addWall(0, -26, 24, 2.8, 3.0, 0x15803d);
+  addWall(0,  26, 24, 2.8, 3.0, 0x15803d);
 
-  // 広大なエリアに多数の障害物ブロック・ベンチ・岩を配置
+  // 8箇所の大型コート・障害物エリア
+  const areas = [
+    {cx:-55,cz:-55},{cx:55,cz:-55},{cx:-55,cz:55},{cx:55,cz:55},
+    {cx:-60,cz:0},{cx:60,cz:0},{cx:0,cz:-60},{cx:0,cz:60}
+  ];
+  areas.forEach((a)=>{
+    addWall(a.cx-10, a.cz, 2.2, 3.0, 14, 0x78350f);
+    addWall(a.cx+10, a.cz, 2.2, 3.0, 14, 0x78350f);
+    addWall(a.cx, a.cz, 6.5, 1.6, 6.5, 0x64748b);
+  });
+
   let seed = 987654;
   const rand = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
 
-  for(let i=0; i<36; i++){
-    const bx = (rand() - 0.5) * 145;
-    const bz = (rand() - 0.5) * 145;
-    if(Math.hypot(bx, bz) < 8) continue;
-    const w = 3 + rand() * 5;
-    const d = 3 + rand() * 5;
-    const h = 1.6 + rand() * 2.2;
+  for(let i=0; i<65; i++){
+    const bx = (rand() - 0.5) * 190;
+    const bz = (rand() - 0.5) * 190;
+    if(Math.hypot(bx, bz) < 10) continue;
+    const w = 3.5 + rand() * 6;
+    const d = 3.5 + rand() * 6;
+    const h = 1.8 + rand() * 2.5;
     addWall(bx, bz, w, h, d, i%2===0 ? 0x57534e : 0x334155);
   }
 
   const propTypes = Object.keys(PROP_DEFS);
-  for(let i=0; i<40; i++){
+  for(let i=0; i<60; i++){
     const typeId = propTypes[i % propTypes.length];
-    const px = (rand() - 0.5) * 145;
-    const pz = (rand() - 0.5) * 145;
-    if(Math.hypot(px, pz) < 6) continue;
+    const px = (rand() - 0.5) * 190;
+    const pz = (rand() - 0.5) * 190;
+    if(Math.hypot(px, pz) < 8) continue;
     spawnWorldProp(typeId, px, 0, pz, rand()*Math.PI*2, false);
   }
 }
 
-// かくれんぼ用：大量の障害物・建物・生垣・120個以上の小道具を広大マップに配置
+// かくれんぼ用：大量の障害物・建物・生垣・180個の小道具を広大220mマップに配置
 function buildPropHuntObstacles(){
   const addWall=(x,z,w,h,d,color)=>{
     const m=new THREE.Mesh(
@@ -1260,38 +1270,41 @@ function buildPropHuntObstacles(){
   };
 
   // 1. 中央タワー・生垣迷路
-  addWall(0, 0, 5.5, 3.0, 5.5, 0x475569);
-  addWall(-20, 0, 2.5, 2.6, 20, 0x15803d);
-  addWall( 20, 0, 2.5, 2.6, 20, 0x15803d);
-  addWall(0, -20, 20, 2.6, 2.5, 0x15803d);
-  addWall(0,  20, 20, 2.6, 2.5, 0x15803d);
+  addWall(0, 0, 6.5, 3.2, 6.5, 0x475569);
+  addWall(-24, 0, 2.8, 2.8, 24, 0x15803d);
+  addWall( 24, 0, 2.8, 2.8, 24, 0x15803d);
+  addWall(0, -24, 24, 2.8, 2.8, 0x15803d);
+  addWall(0,  24, 24, 2.8, 2.8, 0x15803d);
 
-  // 2. 6箇所の大型倉庫・庭園ハウス＆登れる高台ブロック
+  // 2. 10箇所の大型倉庫・庭園ハウス＆登れる高台ブロック
   const zones = [
-    {cx:-45, cz:-45}, {cx:45, cz:-45},
-    {cx:-45, cz: 45}, {cx:45, cz: 45},
-    {cx:-48, cz:  0}, {cx:48, cz:  0}
+    {cx:-55, cz:-55}, {cx:55, cz:-55},
+    {cx:-55, cz: 55}, {cx:55, cz: 55},
+    {cx:-62, cz:  0}, {cx:62, cz:  0},
+    {cx:  0, cz:-62}, {cx: 0, cz: 62},
+    {cx:-85, cz:-40}, {cx:85, cz: 40}
   ];
   zones.forEach((zn)=>{
-    addWall(zn.cx, zn.cz - 8, 16, 3.5, 1.8, 0x78350f);
-    addWall(zn.cx - 8, zn.cz, 1.8, 3.5, 14, 0x78350f);
-    addWall(zn.cx + 8, zn.cz, 1.8, 3.5, 14, 0x78350f);
-    addWall(zn.cx, zn.cz, 7, 1.5, 7, 0x64748b);
-    addWall(zn.cx, zn.cz + 5, 4.5, 0.75, 3.2, 0x94a3b8);
+    addWall(zn.cx, zn.cz - 9, 18, 3.8, 2.0, 0x78350f);
+    addWall(zn.cx - 9, zn.cz, 2.0, 3.8, 16, 0x78350f);
+    addWall(zn.cx + 9, zn.cz, 2.0, 3.8, 16, 0x78350f);
+    addWall(zn.cx, zn.cz, 8, 1.6, 8, 0x64748b);
+    addWall(zn.cx, zn.cz + 5.5, 5, 0.8, 3.5, 0x94a3b8);
   });
 
   // 3. 中距離・外周の遮蔽壁＆石垣を多数追加
   [
-    {x:-32,z:-16,w:10,h:2.4,d:1.6,c:0x57534e},{x:32,z:-16,w:10,h:2.4,d:1.6,c:0x57534e},
-    {x:-32,z: 16,w:10,h:2.4,d:1.6,c:0x57534e},{x:32,z: 16,w:10,h:2.4,d:1.6,c:0x57534e},
-    {x:-16,z:-34,w:1.6,h:2.4,d:10,c:0x57534e},{x:16,z:-34,w:1.6,h:2.4,d:10,c:0x57534e},
-    {x:-16,z: 34,w:1.6,h:2.4,d:10,c:0x57534e},{x:16,z: 34,w:1.6,h:2.4,d:10,c:0x57534e},
-    {x:0,z:-52,w:18,h:2.6,d:2.0,c:0x334155},{x:0,z:52,w:18,h:2.6,d:2.0,c:0x334155},
-    {x:-64,z:-24,w:12,h:2.5,d:2.0,c:0x166534},{x:64,z:-24,w:12,h:2.5,d:2.0,c:0x166534},
-    {x:-64,z: 24,w:12,h:2.5,d:2.0,c:0x166534},{x:64,z: 24,w:12,h:2.5,d:2.0,c:0x166534}
+    {x:-38,z:-18,w:12,h:2.6,d:2.0,c:0x57534e},{x:38,z:-18,w:12,h:2.6,d:2.0,c:0x57534e},
+    {x:-38,z: 18,w:12,h:2.6,d:2.0,c:0x57534e},{x:38,z: 18,w:12,h:2.6,d:2.0,c:0x57534e},
+    {x:-18,z:-38,w:2.0,h:2.6,d:12,c:0x57534e},{x:18,z:-38,w:2.0,h:2.6,d:12,c:0x57534e},
+    {x:-18,z: 38,w:2.0,h:2.6,d:12,c:0x57534e},{x:18,z: 38,w:2.0,h:2.6,d:12,c:0x57534e},
+    {x:-82,z:-24,w:16,h:2.8,d:2.4,c:0x166534},{x:82,z:-24,w:16,h:2.8,d:2.4,c:0x166534},
+    {x:-82,z: 24,w:16,h:2.8,d:2.4,c:0x166534},{x:82,z: 24,w:16,h:2.8,d:2.4,c:0x166534},
+    {x:-24,z:-82,w:2.4,h:2.8,d:16,c:0x166534},{x:24,z:-82,w:2.4,h:2.8,d:16,c:0x166534},
+    {x:-24,z: 82,w:2.4,h:2.8,d:16,c:0x166534},{x:24,z: 82,w:2.4,h:2.8,d:16,c:0x166534}
   ].forEach(w=>addWall(w.x,w.z,w.w,w.h,w.d,w.c));
 
-  // 4. 変身できる小道具（Props）を130個配置
+  // 4. 変身できる小道具（Props）を180個配置
   const propTypes = Object.keys(PROP_DEFS);
   let seed = 424242;
   const rand = () => {
@@ -1299,17 +1312,17 @@ function buildPropHuntObstacles(){
     return seed / 4294967296;
   };
 
-  for(let i=0; i<130; i++){
+  for(let i=0; i<180; i++){
     const typeId = propTypes[i % propTypes.length];
-    let px = (rand() - 0.5) * 150;
-    let pz = (rand() - 0.5) * 150;
-    if(Math.hypot(px, pz) < 6) px += (px >= 0 ? 8 : -8);
+    let px = (rand() - 0.5) * 195;
+    let pz = (rand() - 0.5) * 195;
+    if(Math.hypot(px, pz) < 7) px += (px >= 0 ? 9 : -9);
     const rotY = Math.floor(rand() * 4) * (Math.PI / 2);
     spawnWorldProp(typeId, px, 0, pz, rotY, false);
   }
 }
 
-// FPSステージ：広大な170mアリーナ＆多数の障害物・遮蔽ブロック
+// FPSステージ：広大な220mアリーナ＆多数の障害物・遮蔽ブロック
 function buildFPSBattleArena(){
   const floor=new THREE.Mesh(
     new THREE.PlaneGeometry(ARENA_HALF*2,ARENA_HALF*2),
@@ -1317,7 +1330,7 @@ function buildFPSBattleArena(){
   );
   floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;worldGroup.add(floor);
 
-  const grid=new THREE.GridHelper(ARENA_HALF*2, 56, 0x38bdf8, 0x334155);
+  const grid=new THREE.GridHelper(ARENA_HALF*2, 72, 0x38bdf8, 0x334155);
   grid.position.y=0.02;worldGroup.add(grid);
 
   const wallMat=new THREE.MeshStandardMaterial({color:0x0f172a,roughness:0.6,metalness:0.4});
@@ -1325,8 +1338,8 @@ function buildFPSBattleArena(){
     {x:0,z:-ARENA_HALF,w:ARENA_HALF*2+2,d:2},{x:0,z:ARENA_HALF,w:ARENA_HALF*2+2,d:2},
     {x:-ARENA_HALF,z:0,w:2,d:ARENA_HALF*2+2},{x:ARENA_HALF,z:0,w:2,d:ARENA_HALF*2+2}
   ].forEach(pw=>{
-    const m=new THREE.Mesh(new THREE.BoxGeometry(pw.w,7,pw.d),wallMat);
-    m.position.set(pw.x,3.5,pw.z);m.castShadow=true;worldGroup.add(m);
+    const m=new THREE.Mesh(new THREE.BoxGeometry(pw.w,7.5,pw.d),wallMat);
+    m.position.set(pw.x,3.75,pw.z);m.castShadow=true;worldGroup.add(m);
   });
 
   const addBlock=(x,z,w,h,d,color,emissive=0x000000,emInt=0)=>{
@@ -1336,57 +1349,57 @@ function buildFPSBattleArena(){
     addBoxCollider(x,z,w,d,h);
   };
 
-  // 🔵 BLUE BASE (南: Z = +64)
-  const blueZone=new THREE.Mesh(new THREE.PlaneGeometry(32,18),
+  // 🔵 BLUE BASE (南: Z = +82)
+  const blueZone=new THREE.Mesh(new THREE.PlaneGeometry(38,20),
     new THREE.MeshStandardMaterial({color:0x1d4ed8,emissive:0x1e40af,emissiveIntensity:0.5}));
-  blueZone.rotation.x=-Math.PI/2;blueZone.position.set(0,0.03,64);worldGroup.add(blueZone);
-  addBlock(-10,54,6,2.5,1.8,0x2563eb,0x1d4ed8,0.3);
-  addBlock( 10,54,6,2.5,1.8,0x2563eb,0x1d4ed8,0.3);
-  addBlock( 0,48,5,1.5,1.8,0x3b82f6);
+  blueZone.rotation.x=-Math.PI/2;blueZone.position.set(0,0.03,82);worldGroup.add(blueZone);
+  addBlock(-12,70,7,2.6,2.0,0x2563eb,0x1d4ed8,0.3);
+  addBlock( 12,70,7,2.6,2.0,0x2563eb,0x1d4ed8,0.3);
+  addBlock( 0,62,6,1.6,2.0,0x3b82f6);
 
-  // 🔴 RED BASE (北: Z = -64)
-  const redZone=new THREE.Mesh(new THREE.PlaneGeometry(32,18),
+  // 🔴 RED BASE (北: Z = -82)
+  const redZone=new THREE.Mesh(new THREE.PlaneGeometry(38,20),
     new THREE.MeshStandardMaterial({color:0xb91c1c,emissive:0x991b1b,emissiveIntensity:0.5}));
-  redZone.rotation.x=-Math.PI/2;redZone.position.set(0,0.03,-64);worldGroup.add(redZone);
-  addBlock(-10,-54,6,2.5,1.8,0xe11d48,0xbe123c,0.3);
-  addBlock( 10,-54,6,2.5,1.8,0xe11d48,0xbe123c,0.3);
-  addBlock( 0,-48,5,1.5,1.8,0xf43f5e);
+  redZone.rotation.x=-Math.PI/2;redZone.position.set(0,0.03,-82);worldGroup.add(redZone);
+  addBlock(-12,-70,7,2.6,2.0,0xe11d48,0xbe123c,0.3);
+  addBlock( 12,-70,7,2.6,2.0,0xe11d48,0xbe123c,0.3);
+  addBlock( 0,-62,6,1.6,2.0,0xf43f5e);
 
   // 中央タワー＆多数の遮蔽ウォール
-  addBlock(0,0,8,3.2,8,0x475569,0xf59e0b,0.15);
-  addBlock(0,0,4,5.8,4,0x334155);
-  addBlock(-14,0,3.0,2.2,10,0x64748b);
-  addBlock( 14,0,3.0,2.2,10,0x64748b);
-  addBlock( 0,16,10,2.2,3.0,0x64748b);
-  addBlock( 0,-16,10,2.2,3.0,0x64748b);
+  addBlock(0,0,9,3.4,9,0x475569,0xf59e0b,0.15);
+  addBlock(0,0,4.5,6.2,4.5,0x334155);
+  addBlock(-16,0,3.2,2.4,12,0x64748b);
+  addBlock( 16,0,3.2,2.4,12,0x64748b);
+  addBlock( 0,20,12,2.4,3.2,0x64748b);
+  addBlock( 0,-20,12,2.4,3.2,0x64748b);
 
   // 左右高台デッキ＆段差
-  [-40,40].forEach(sx=>{
-    addBlock(sx,0,11,3.0,22,0x334155);
-    addBlock(sx>0?sx-4.5:sx+4.5,-7,1.2,4.2,5,0x475569);
-    addBlock(sx>0?sx-4.5:sx+4.5, 7,1.2,4.2,5,0x475569);
-    addBlock(sx, 15,8,1.9,5,0x475569);
-    addBlock(sx, 20,8,0.95,5,0x64748b);
-    addBlock(sx,-15,8,1.9,5,0x475569);
-    addBlock(sx,-20,8,0.95,5,0x64748b);
+  [-52,52].forEach(sx=>{
+    addBlock(sx,0,13,3.2,26,0x334155);
+    addBlock(sx>0?sx-5.5:sx+5.5,-8,1.4,4.5,6,0x475569);
+    addBlock(sx>0?sx-5.5:sx+5.5, 8,1.4,4.5,6,0x475569);
+    addBlock(sx, 18,9,2.0,6,0x475569);
+    addBlock(sx, 24,9,1.0,6,0x64748b);
+    addBlock(sx,-18,9,2.0,6,0x475569);
+    addBlock(sx,-24,9,1.0,6,0x64748b);
   });
 
   // 追加の中距離・外周コンテナ＆バンカー障害物（24個）
   [
-    {x:-24,z:32,w:7,h:2.8,d:3.0,c:0x0284c7},{x:24,z:32,w:7,h:2.8,d:3.0,c:0x0284c7},
-    {x:-24,z:-32,w:7,h:2.8,d:3.0,c:0xe11d48},{x:24,z:-32,w:7,h:2.8,d:3.0,c:0xe11d48},
-    {x:-56,z:34,w:8,h:3.0,d:4.0,c:0x475569},{x:56,z:34,w:8,h:3.0,d:4.0,c:0x475569},
-    {x:-56,z:-34,w:8,h:3.0,d:4.0,c:0x475569},{x:56,z:-34,w:8,h:3.0,d:4.0,c:0x475569},
-    {x:-18,z:0,w:3.5,h:2.6,d:6.0,c:0x334155},{x:18,z:0,w:3.5,h:2.6,d:6.0,c:0x334155},
-    {x:0,z:28,w:8.0,h:2.4,d:3.0,c:0x334155},{x:0,z:-28,w:8.0,h:2.4,d:3.0,c:0x334155},
-    {x:-62,z:0,w:4.0,h:3.2,d:12.0,c:0x1e293b},{x:62,z:0,w:4.0,h:3.2,d:12.0,c:0x1e293b}
+    {x:-30,z:42,w:8,h:3.0,d:3.5,c:0x0284c7},{x:30,z:42,w:8,h:3.0,d:3.5,c:0x0284c7},
+    {x:-30,z:-42,w:8,h:3.0,d:3.5,c:0xe11d48},{x:30,z:-42,w:8,h:3.0,d:3.5,c:0xe11d48},
+    {x:-72,z:45,w:10,h:3.2,d:4.5,c:0x475569},{x:72,z:45,w:10,h:3.2,d:4.5,c:0x475569},
+    {x:-72,z:-45,w:10,h:3.2,d:4.5,c:0x475569},{x:72,z:-45,w:10,h:3.2,d:4.5,c:0x475569},
+    {x:-24,z:0,w:4.0,h:2.8,d:8.0,c:0x334155},{x:24,z:0,w:4.0,h:2.8,d:8.0,c:0x334155},
+    {x:0,z:38,w:10.0,h:2.6,d:3.5,c:0x334155},{x:0,z:-38,w:10.0,h:2.6,d:3.5,c:0x334155},
+    {x:-80,z:0,w:4.5,h:3.5,d:16.0,c:0x1e293b},{x:80,z:0,w:4.5,h:3.5,d:16.0,c:0x1e293b}
   ].forEach(b=>addBlock(b.x,b.z,b.w,b.h,b.d,b.c));
 
   // ジャンプパッド
-  [{x:-20,z:20},{x:20,z:20},{x:-20,z:-20},{x:20,z:-20},{x:-48,z:22},{x:48,z:-22}].forEach(jp=>{
-    const pad=new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.7,0.22,18),
+  [{x:-24,z:24},{x:24,z:24},{x:-24,z:-24},{x:24,z:-24},{x:-60,z:28},{x:60,z:-28},{x:-60,z:-28},{x:60,z:28}].forEach(jp=>{
+    const pad=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.8,0.22,18),
       new THREE.MeshStandardMaterial({color:0x38bdf8,emissive:0x0284c7,emissiveIntensity:0.8}));
-    pad.position.set(jp.x,0.11,jp.z);worldGroup.add(pad);jumpPads.push({x:jp.x,z:jp.z,radius:1.7,mesh:pad});
+    pad.position.set(jp.x,0.11,jp.z);worldGroup.add(pad);jumpPads.push({x:jp.x,z:jp.z,radius:1.8,mesh:pad});
   });
 
   syncBotsWithHumanPriority();
@@ -1412,8 +1425,8 @@ function syncBotsWithHumanPriority(){
     while(fpsBots.length < desiredBots){
       const idx = fpsBots.length;
       const cfg = presets[idx] || {name:`Bot_${idx+1}`, team:enemyTeam};
-      const spawnZ = cfg.team==='blue'?58:-58;
-      const spawnX = (idx===0?-10:10);
+      const spawnZ = cfg.team==='blue'?76:-76;
+      const spawnX = (idx===0?-12:12);
       const mesh=createCharacterMesh(0x38bdf8,false,cfg.team);
       mesh.position.set(spawnX,0,spawnZ);worldGroup.add(mesh);
       attachNametag(mesh, cfg.name, cfg.team, 100, 100);
@@ -1422,22 +1435,20 @@ function syncBotsWithHumanPriority(){
         pos:new THREE.Vector3(spawnX,0,spawnZ), vel:new THREE.Vector3(),
         rotY:cfg.team==='blue'?Math.PI:0, hp:100, maxHp:100,
         deadTimer:0, shootTimer:1.8+Math.random(), moveTimer:0,
-        targetPos:new THREE.Vector3((Math.random()-0.5)*110,0,(Math.random()-0.5)*110), moveSpeed:0
+        targetPos:new THREE.Vector3((Math.random()-0.5)*170,0,(Math.random()-0.5)*170), moveSpeed:0
       });
     }
   } else if(gameState.mode === 'tag'){
     if(gameState.tagRole === 'runner'){
-      // 鬼ごっこ：逃走者側で人間が2人以上ならAI鬼は0体にしてオンライン鬼・逃走者を優先
       const desiredAiSeekers = activeHumans >= 2 ? 0 : 1;
       while(seekersList.length > desiredAiSeekers){
         const s = seekersList.pop();
         if(s?.mesh) worldGroup.remove(s.mesh);
       }
       if(seekersList.length < desiredAiSeekers){
-        seekersList.push(createAISeeker(-55,-55,0));
+        seekersList.push(createAISeeker(-70,-70,0));
       }
     } else {
-      // 鬼側：人間逃走者がいる時はAI逃走者を減らし、1人の時だけAI逃走者を配置
       const desiredAiRunners = activeHumans >= 2 ? 0 : 3;
       while(runnersList.length > desiredAiRunners){
         const r = runnersList.pop();
@@ -1445,7 +1456,7 @@ function syncBotsWithHumanPriority(){
       }
       while(runnersList.length < desiredAiRunners){
         const idx = runnersList.length;
-        runnersList.push(createAIRunner((Math.random()-0.5)*110,(Math.random()-0.5)*110,idx));
+        runnersList.push(createAIRunner((Math.random()-0.5)*150,(Math.random()-0.5)*150,idx));
       }
     }
   }
@@ -1532,8 +1543,8 @@ async function startGame(mode, isLateJoin=false){
   gameState.prophuntSeekerDeployed = !inHidePhase;
 
   if(mode==='fps'){
-    const spawnZ = gameState.fps.team==='blue'?62:-62;
-    player.pos.set((Math.random()-0.5)*18, 0, spawnZ);
+    const spawnZ = gameState.fps.team==='blue'?78:-78;
+    player.pos.set((Math.random()-0.5)*22, 0, spawnZ);
     player.fpsYaw = gameState.fps.team==='blue'?0:Math.PI;
     player.fpsPitch = 0;
   } else if(mode==='prophunt' && gameState.phRole==='seeker' && inHidePhase){
@@ -1541,7 +1552,7 @@ async function startGame(mode, isLateJoin=false){
     player.pos.set(VOID_ROOM_POS.x, VOID_ROOM_POS.y, VOID_ROOM_POS.z);
     player.fpsYaw = 0; player.fpsPitch = 0;
   } else {
-    player.pos.set((Math.random()-0.5)*20,0,18);
+    player.pos.set((Math.random()-0.5)*24,0,20);
     player.rotY=Math.PI;camCtrl.yaw=Math.PI;
     player.fpsYaw=Math.PI;player.fpsPitch=0;
   }
@@ -1598,7 +1609,6 @@ async function startGame(mode, isLateJoin=false){
       gameState.tagRole==='seeker' ? '逃走者に触れてダメージを与えよう（触れると3秒スタン）！' : '鬼から逃げ切れ！触れるとダメージ＆鬼を3秒スタン！'
     );
   } else {
-    // かくれんぼモード
     modeBadge.textContent='3D 変身かくれんぼ';modeBadge.className='px-2.5 py-0.5 rounded-lg text-xs font-black bg-emerald-500 text-slate-950';
     if(gameState.phRole==='hider'){
       phActions.classList.remove('hidden');phActions.classList.add('flex');
@@ -1610,10 +1620,9 @@ async function startGame(mode, isLateJoin=false){
       const hideLeft = Math.max(0, Math.ceil(HIDE_PHASE_SEC - elapsed));
       showBanner(
         inHidePhase ? `🪴 隠れタイム（残り${hideLeft}秒）！` : '🔍 鬼が捜索中！',
-        inHidePhase ? '30秒の間にモノに変身して隠れよう！鬼は別空間で待機中' : '変身して見つからないように隠れよう！'
+        inHidePhase ? '30秒の間にモノに変身して隠れよう！鬼は別空間で待機中' : '変身して見つからないように逃げ隠れしよう！'
       );
     } else {
-      // かくれんぼ鬼側：銃を装備
       phActions.classList.add('hidden');disguiseBox.classList.add('hidden');hpContainer.classList.add('hidden');
       document.getElementById('reticle-container').style.display='none';
       document.getElementById('fps-crosshair').style.display='block';
@@ -1753,9 +1762,9 @@ function shootGun(){
   const camDir=new THREE.Vector3();camera.getWorldDirection(camDir);
   const startPos=camera.position.clone().addScaledVector(camDir,0.8);startPos.y-=0.12;
 
-  raycaster.setFromCamera(new THREE.Vector2(0,0),camera);raycaster.near=0.05;raycaster.far=140;
-  let hitPoint=startPos.clone().addScaledVector(camDir,90);
-  let hitEnemy=null, isHeadshot=false, closestDist=140;
+  raycaster.setFromCamera(new THREE.Vector2(0,0),camera);raycaster.near=0.05;raycaster.far=160;
+  let hitPoint=startPos.clone().addScaledVector(camDir,100);
+  let hitEnemy=null, isHeadshot=false, closestDist=160;
 
   // 壁・障害物との交差を先に判定し、壁越しのヒットを防ぐ
   const worldHits=raycaster.intersectObjects(worldGroup.children,true);
@@ -1770,8 +1779,7 @@ function shootGun(){
     if(gameState.mode==='fps'){
       if(rp.team===gameState.fps.team||(rp.hp||0)<=0)return;
     } else if(gameState.mode==='prophunt'){
-      // かくれんぼ鬼側：変身中のプロップサイズも考慮してヒット判定
-      if(rp.phRole==='seeker')return;
+      if(rp.role==='seeker')return;
     }
     const propH = rp.disguise ? PROP_DEFS[rp.disguise]?.height || 1.3 : 2.1;
     const res=checkRayHitCharacter(raycaster.ray,rp.mesh.position,closestDist,propH);
@@ -1791,15 +1799,16 @@ function shootGun(){
   sendShotBeamToRemote(startPos,hitPoint,beamColor);
 
   if(hitEnemy){
-    const dmg = gameState.mode==='prophunt' ? 50 : (isHeadshot?50:25);
+    const dmg = gameState.mode==='prophunt' ? 1 : (isHeadshot?50:25);
     const ch=document.getElementById('fps-crosshair');ch.classList.add('hit');setTimeout(()=>ch.classList.remove('hit'),120);
     sound.playTargetHit();spawn3DBurst(hitPoint.x,hitPoint.y,hitPoint.z,isHeadshot?0xfacc15:0xf43f5e,14);
-    addFloatingSprite(hitPoint.x,hitPoint.y+0.4,hitPoint.z,isHeadshot?`HEAD -${dmg}!`:`-${dmg}`,isHeadshot?'#facc15':'#fb7185');
+    addFloatingSprite(hitPoint.x,hitPoint.y+0.4,hitPoint.z,gameState.mode==='prophunt'?'HIT!':(isHeadshot?`HEAD -${dmg}!`:`-${dmg}`),isHeadshot?'#facc15':'#fb7185');
     if(hitEnemy.type==='remote'){
       sendHitEventToRemote(hitEnemy.target.uid,dmg,isHeadshot);
       if(gameState.mode==='prophunt'){
-        gameState.score+=150;
-        pushToast(`🎯 変身中の ${hitEnemy.target.username} に命中！ +150pt`,'text-amber-300');
+        gameState.score+=200;
+        gameState.stats.tagsMade++;
+        pushToast(`🎯 変身中の ${hitEnemy.target.username} に命中！ +200pt`,'text-amber-300');
       }
     } else {
       damageFPSBot(hitEnemy.target,dmg,isHeadshot);
@@ -1810,10 +1819,10 @@ function shootGun(){
 function checkRayHitCharacter(ray,charPos,maxDist,heightScale=2.1){
   const headCenter=new THREE.Vector3(charPos.x,charPos.y+Math.min(2.1,heightScale*0.85),charPos.z);
   const headDist=ray.origin.distanceTo(headCenter);
-  if(headDist<maxDist&&ray.distanceSqToPoint(headCenter)<0.42*0.42)return{hit:true,headshot:true,dist:headDist,point:headCenter};
+  if(headDist<maxDist&&ray.distanceSqToPoint(headCenter)<0.45*0.45)return{hit:true,headshot:true,dist:headDist,point:headCenter};
   const bodyCenter=new THREE.Vector3(charPos.x,charPos.y+Math.max(0.55,heightScale*0.5),charPos.z);
   const bodyDist=ray.origin.distanceTo(bodyCenter);
-  if(bodyDist<maxDist&&ray.distanceSqToPoint(bodyCenter)<0.82*0.82)return{hit:true,headshot:false,dist:bodyDist,point:bodyCenter};
+  if(bodyDist<maxDist&&ray.distanceSqToPoint(bodyCenter)<0.88*0.88)return{hit:true,headshot:false,dist:bodyDist,point:bodyCenter};
   return{hit:false};
 }
 
@@ -1855,7 +1864,6 @@ function takePlayerDamage(dmg,attackerName='鬼・敵プレイヤー'){
       showBanner('💀 やられた！',`${attackerName} に倒された！ 3秒後にリスポーン...`);
     }
   } else {
-    // 鬼ごっこ・かくれんぼのダメージ処理
     gameState.hp = Math.max(0, gameState.hp - 1);
     gameState.invulnTimer = 1.5;
     sound.playHit();
@@ -1870,7 +1878,7 @@ function takePlayerDamage(dmg,attackerName='鬼・敵プレイヤー'){
 
 function respawnFPSPlayer(){
   gameState.fps.hp=gameState.fps.maxHp;gameState.fps.ammo=gameState.fps.magSize;gameState.fps.reloadTimer=0;
-  player.pos.set((Math.random()-0.5)*18,0,gameState.fps.team==='blue'?62:-62);
+  player.pos.set((Math.random()-0.5)*22,0,gameState.fps.team==='blue'?78:-78);
   player.vel.set(0,0,0);player.fpsYaw=gameState.fps.team==='blue'?0:Math.PI;
   updateFPSHUD();pushToast('✨ リスポーン完了！','text-emerald-300');
 }
@@ -1894,8 +1902,7 @@ function addFloatingSprite(x,y,z,text,color){
 // 物理演算＆壁貫通防止
 // ==========================================
 function getGroundHeightAt(x,z,radius,currentY){
-  // 別空間（VOID_ROOM_POS）の床判定
-  if(Math.abs(x - VOID_ROOM_POS.x) < 14 && Math.abs(z - VOID_ROOM_POS.z) < 14 && currentY >= VOID_ROOM_POS.y - 2){
+  if(Math.abs(x - VOID_ROOM_POS.x) < 16 && Math.abs(z - VOID_ROOM_POS.z) < 16 && currentY >= VOID_ROOM_POS.y - 2){
     return VOID_ROOM_POS.y;
   }
   let maxGround=0;
@@ -1908,9 +1915,8 @@ function getGroundHeightAt(x,z,radius,currentY){
 }
 
 function resolveHorizontalCollisions(pos,radius,currentY){
-  // 別空間にいる場合は別空間壁で制限
-  if(Math.abs(pos.x - VOID_ROOM_POS.x) < 16 && Math.abs(pos.z - VOID_ROOM_POS.z) < 16 && currentY > VOID_ROOM_POS.y - 2){
-    const vLim = 13.0 - radius;
+  if(Math.abs(pos.x - VOID_ROOM_POS.x) < 18 && Math.abs(pos.z - VOID_ROOM_POS.z) < 18 && currentY > VOID_ROOM_POS.y - 2){
+    const vLim = 14.0 - radius;
     pos.x = Math.max(VOID_ROOM_POS.x - vLim, Math.min(VOID_ROOM_POS.x + vLim, pos.x));
     pos.z = Math.max(VOID_ROOM_POS.z - vLim, Math.min(VOID_ROOM_POS.z + vLim, pos.z));
     return false;
@@ -2151,22 +2157,24 @@ function startMatchAndPlayerSync(createNewMatch=true){
 
       let rp=remotePlayers[uid];
       const isRemoteSeeker = (p.mode==='tag' && p.role==='seeker') || (p.mode==='prophunt' && p.role==='seeker');
+      const nextDisguise = (p.mode==='prophunt' && p.disguise && PROP_DEFS[p.disguise]) ? p.disguise : null;
 
-      // 変身状態（p.disguise）や役割・チームが変わったらメッシュを再構築して確実に変身姿を表示
-      if(!rp || rp.team!==p.team || rp.disguise!==p.disguise || rp.isSeeker!==isRemoteSeeker){
+      // 変身状態（nextDisguise）や役割・チームが変わったらメッシュを再構築
+      if(!rp || rp.team!==p.team || rp.disguise!==nextDisguise || rp.isSeeker!==isRemoteSeeker){
         if(rp?.mesh)worldGroup.remove(rp.mesh);
-        let mesh;
-        if(p.mode==='prophunt' && p.disguise && PROP_DEFS[p.disguise]){
-          mesh = createProp3DMesh(p.disguise);
+        let mesh, tagY=2.75;
+        if(nextDisguise){
+          mesh = createProp3DMesh(nextDisguise);
+          tagY = (PROP_DEFS[nextDisguise]?.height || 1.3) + 0.85;
         } else {
           mesh = createCharacterMesh(isRemoteSeeker?0xe11d48:0x38bdf8, isRemoteSeeker, p.team||null);
         }
         mesh.position.set(p.x,p.y,p.z);worldGroup.add(mesh);
-        attachNametag(mesh,p.username||'Player',p.team||null,p.hp??100,100);
+        attachNametag(mesh,p.username||'Player',p.team||null,p.hp??100,p.mode==='fps'?100:0,tagY);
         rp={
           mesh,uid,targetPos:new THREE.Vector3(p.x,p.y,p.z),
           team:p.team,hp:p.hp??100,username:p.username,mode:p.mode,
-          role:p.role,disguise:p.disguise||null,isSeeker:isRemoteSeeker
+          role:p.role,disguise:nextDisguise,isSeeker:isRemoteSeeker
         };
         remotePlayers[uid]=rp;
         if(!rp._announced){
@@ -2177,7 +2185,7 @@ function startMatchAndPlayerSync(createNewMatch=true){
 
       rp.mode=p.mode;
       rp.role=p.role;
-      rp.disguise=p.disguise||null;
+      rp.disguise=nextDisguise;
       rp.targetPos.set(p.x,p.y,p.z);
       rp.hp=p.hp??100;
       rp.username=p.username||'Player';
@@ -2250,7 +2258,7 @@ function updateRemotePlayers(dt){
     const px=rp.mesh.position.x,pz=rp.mesh.position.z;
     rp.mesh.position.lerp(rp.targetPos,Math.min(1,dt*14));
     const sp=Math.hypot(rp.mesh.position.x-px,rp.mesh.position.z-pz)/Math.max(0.001,dt);
-    if(sp>0.2)rp.mesh.rotation.y=Math.atan2(rp.mesh.position.x-px,rp.mesh.position.z-pz);
+    if(sp>0.2 && !rp.disguise)rp.mesh.rotation.y=Math.atan2(rp.mesh.position.x-px,rp.mesh.position.z-pz);
     if(rp.mesh.userData.joints)animateCharacter(rp.mesh,dt,sp,true);
 
     // 鬼ごっこ：自分が「鬼」でオンライン逃走者に触れたらダメージ＆3秒スタン
@@ -2291,7 +2299,7 @@ function update(dt){
     if(!gameState.prophuntSeekerDeployed && elapsed >= HIDE_PHASE_SEC){
       gameState.prophuntSeekerDeployed = true;
       if(gameState.phRole === 'seeker'){
-        player.pos.set((Math.random()-0.5)*16, 0, -24);
+        player.pos.set((Math.random()-0.5)*20, 0, -28);
         player.vel.set(0,0,0);
         player.fpsYaw = 0;
         sound.playTeleport();
@@ -2406,7 +2414,7 @@ function updateFPSBots(dt){
     if(bot.deadTimer>0){
       bot.deadTimer-=dt;
       if(bot.deadTimer<=0){
-        bot.hp=bot.maxHp;bot.pos.set((Math.random()-0.5)*24,0,bot.team==='blue'?58:-58);
+        bot.hp=bot.maxHp;bot.pos.set((Math.random()-0.5)*28,0,bot.team==='blue'?76:-76);
         bot.mesh.visible=true;updateRobloxNametag(bot.mesh.userData.nametag,bot.name,bot.team,bot.hp,bot.maxHp);
       }
       return;
@@ -2415,7 +2423,7 @@ function updateFPSBots(dt){
     bot.moveTimer-=dt;
     if(bot.moveTimer<=0){
       bot.moveTimer=2.2+Math.random()*2;
-      bot.targetPos.set((Math.random()-0.5)*130,0,(Math.random()-0.5)*130);
+      bot.targetPos.set((Math.random()-0.5)*170,0,(Math.random()-0.5)*170);
     }
 
     const dir=new THREE.Vector3().subVectors(bot.targetPos,bot.pos);dir.y=0;
@@ -2433,7 +2441,7 @@ function updateFPSBots(dt){
     if(hitWall){
       bot.vel.x *= -0.3;
       bot.vel.z *= -0.3;
-      bot.targetPos.set((Math.random()-0.5)*130, 0, (Math.random()-0.5)*130);
+      bot.targetPos.set((Math.random()-0.5)*170, 0, (Math.random()-0.5)*170);
       bot.moveTimer = 1.5;
     }
 
@@ -2442,7 +2450,7 @@ function updateFPSBots(dt){
     bot.mesh.position.copy(bot.pos);bot.mesh.rotation.y=bot.rotY;
     animateCharacter(bot.mesh,dt,bot.moveSpeed,true);
 
-    if(bot.team!==gameState.fps.team&&gameState.fps.respawnTimer<=0&&bot.pos.distanceTo(player.pos)<34){
+    if(bot.team!==gameState.fps.team&&gameState.fps.respawnTimer<=0&&bot.pos.distanceTo(player.pos)<38){
       const muzzlePos = bot.pos.clone().add(new THREE.Vector3(0,1.5,0));
       const targetEyePos = player.pos.clone().add(new THREE.Vector3(0,1.35,0));
       const los = hasLineOfSight(muzzlePos, targetEyePos);
@@ -2496,16 +2504,15 @@ function updateAISeekers(dt){
     }
     const dist=s.pos.distanceTo(player.pos);
     s.patrolTimer-=dt;
-    if(s.patrolTimer<=0){s.patrolTimer=2+Math.random()*2;s.targetPos.set((Math.random()-0.5)*140,0,(Math.random()-0.5)*140);}
-    const target=dist<26?player.pos:s.targetPos;
+    if(s.patrolTimer<=0){s.patrolTimer=2+Math.random()*2;s.targetPos.set((Math.random()-0.5)*180,0,(Math.random()-0.5)*180);}
+    const target=dist<30?player.pos:s.targetPos;
     const dir=new THREE.Vector3().subVectors(target,s.pos);dir.y=0;if(dir.length()>0.2)dir.normalize();
     s.vel.x+=(dir.x*s.baseSpeed-s.vel.x)*Math.min(1,dt*5);s.vel.z+=(dir.z*s.baseSpeed-s.vel.z)*Math.min(1,dt*5);
     s.pos.x+=s.vel.x*dt;s.pos.z+=s.vel.z*dt;
     const hitW = resolveHorizontalCollisions(s.pos,s.radius,0);
-    if(hitW){s.targetPos.set((Math.random()-0.5)*140,0,(Math.random()-0.5)*140);}
+    if(hitW){s.targetPos.set((Math.random()-0.5)*180,0,(Math.random()-0.5)*180);}
     s.mesh.position.copy(s.pos);s.mesh.rotation.y=Math.atan2(s.vel.x,s.vel.z);
 
-    // AI鬼がプレイヤーに触れたらダメージを与え、AI鬼自身も3秒スタン
     if(dist<1.75 && gameState.mode==='tag' && gameState.tagRole==='runner'){
       s.stunTimer = 3.0;
       s.vel.set(0,0,0);
@@ -2525,7 +2532,6 @@ function updateAIRunners(dt){
     if(hitW) r.targetRotY += Math.PI*0.75;
     r.mesh.position.copy(r.pos);r.mesh.rotation.y=Math.atan2(r.vel.x,r.vel.z);
 
-    // 自分が鬼でAI逃走者に触れたらダメージ＆鬼3秒スタン
     if(gameState.mode==='tag' && gameState.tagRole==='seeker' && gameState.seekerStunTimer<=0 && player.pos.distanceTo(r.pos)<1.8){
       r.hp = (r.hp || 3) - 1;
       if(r.hp <= 0){ r.caught=true; worldGroup.remove(r.mesh); }
