@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>3D Acorn GM</title>
+<title>3D 鬼ごっこ＆変身かくれんぼ＋チームFPS（完全オンライン版）</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap" rel="stylesheet">
@@ -21,8 +21,8 @@
   #fps-crosshair::after{top:50%;left:0;height:2px;width:100%;transform:translateY(-50%);}
   #fps-crosshair .hit-marker{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%) rotate(45deg);border:2px solid #f43f5e;border-radius:2px;opacity:0;transition:opacity .1s;}
   #fps-crosshair.hit .hit-marker{opacity:1;}
-  #fps-hud{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:15;pointer-events:none;display:none;flex-direction:column;align-items:center;gap:6px;}
-  #fps-hud .ammo{font-size:28px;font-weight:900;color:#fbbf24;text-shadow:0 2px 8px rgba(0,0,0,.9);}
+  #fps-hud{position:absolute;bottom:92px;left:50%;transform:translateX(-50%);z-index:15;pointer-events:none;display:none;flex-direction:column;align-items:center;gap:4px;}
+  #fps-hud .ammo{font-size:24px;font-weight:900;color:#fbbf24;text-shadow:0 2px 8px rgba(0,0,0,.9);}
   #fps-hud .ammo small{font-size:13px;color:#94a3b8;}
   #hit-vignette{position:absolute;inset:0;z-index:11;pointer-events:none;opacity:0;background:radial-gradient(circle,transparent 50%,rgba(244,63,94,.65) 100%);transition:opacity .15s;}
   .mode-tab{transition:all .2s;border-bottom:3px solid transparent;}
@@ -37,14 +37,15 @@
   .glow-sky{animation:pulse-glow-sky 2s infinite;}
   @keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
   .animate-float{animation:float 3s ease-in-out infinite;}
-  /* ESC押下時：背景をぼかさず、透明感を持たせて背後が見えるようにする */
   #pause-overlay{position:fixed;inset:0;z-index:60;background:rgba(2,6,23,.22);display:none;align-items:center;justify-content:center;padding:1rem;}
   #pause-overlay.show{display:flex;}
-  /* クリックヒントも背景ぼかしなし */
+  #inventory-overlay{position:fixed;inset:0;z-index:62;background:rgba(2,6,23,.35);display:none;align-items:center;justify-content:center;padding:1rem;}
+  #inventory-overlay.show{display:flex;}
   #click-hint{position:fixed;inset:0;z-index:55;display:none;align-items:center;justify-content:center;background:rgba(2,6,23,.12);pointer-events:none;}
   #click-hint.show{display:flex;}
   #click-hint .box{pointer-events:none;animation:pulseHint 2s infinite;}
   @keyframes pulseHint{0%,100%{transform:scale(1);opacity:.92;}50%{transform:scale(1.04);opacity:1;}}
+  .hotbar-slot.selected{border-color:#fbbf24;box-shadow:0 0 14px rgba(251,191,36,.75);transform:translateY(-4px);background:rgba(30,41,59,.96);}
 </style>
 </head>
 <body class="w-screen h-screen relative overflow-hidden bg-slate-950">
@@ -59,10 +60,25 @@
 <div id="fps-crosshair" style="display:none;"><div class="hit-marker"></div></div>
 <div id="fps-hud">
   <div id="fps-team-badge" class="px-3 py-1 rounded-full text-xs font-black bg-sky-600 text-white shadow-lg">🔵 BLUE TEAM</div>
-  <div class="ammo" id="fps-ammo">15 <small>/ ∞</small></div>
+  <div class="ammo" id="fps-ammo">15 <small>/ 70</small></div>
+  <div id="fps-weapon-label" class="text-[11px] font-black text-sky-300 bg-slate-900/80 px-2.5 py-0.5 rounded-full border border-slate-700">アサルトライフル</div>
 </div>
 
-<!-- かくれんぼ照準 -->
+<!-- フォートナイト風5スロットホットバー（FPS＆かくれんぼ鬼用） -->
+<div id="fps-hotbar" class="hidden fixed bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-slate-950/85 border border-slate-700/90 px-3 py-2 rounded-2xl shadow-2xl pointer-events-auto">
+  <div id="hotbar-slots" class="flex items-center gap-1.5 sm:gap-2"></div>
+  <div class="h-10 w-[1px] bg-slate-700 mx-0.5"></div>
+  <button id="btn-drop-slot" class="game-btn px-2.5 py-2 rounded-xl bg-rose-900/80 hover:bg-rose-800 border border-rose-500/50 text-[11px] font-black text-rose-200 flex flex-col items-center justify-center" title="選択中アイテムを落とす [G]">
+    <span>📤 落とす</span>
+    <span class="text-[9px] text-rose-300">[G]</span>
+  </button>
+  <button id="btn-open-bag" class="game-btn px-2.5 py-2 rounded-xl bg-amber-900/80 hover:bg-amber-800 border border-amber-500/50 text-[11px] font-black text-amber-200 flex flex-col items-center justify-center" title="バックパックを開く [Tab / B]">
+    <span>🎒 袋</span>
+    <span class="text-[9px] text-amber-300">[B]</span>
+  </button>
+</div>
+
+<!-- かくれんぼ照準＆インタラクトプロンプト -->
 <div id="reticle-container" class="hidden pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
   <div id="reticle-dot" class="w-3.5 h-3.5 rounded-full border-2 border-white/80 bg-white/20 shadow-[0_0_8px_rgba(0,0,0,.8)] transition-all duration-100"></div>
   <div id="target-prompt" class="mt-4 px-3.5 py-1.5 rounded-xl bg-slate-950/85 border border-emerald-400/80 text-emerald-300 text-xs font-black shadow-lg opacity-0 transition-opacity duration-150 flex items-center gap-1.5">
@@ -155,7 +171,7 @@
 <div id="toast-feed" class="pointer-events-none absolute top-36 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1"></div>
 
 <!-- モバイル＆アクションコントロール -->
-<div id="controls-overlay" class="hidden absolute bottom-4 left-4 right-4 z-20 flex items-end justify-between pointer-events-none">
+<div id="controls-overlay" class="hidden absolute bottom-20 left-4 right-4 z-20 flex items-end justify-between pointer-events-none">
   <div class="pointer-events-auto opacity-85 hover:opacity-100 transition-opacity">
     <div id="joystick-zone"><div id="joystick-knob"></div></div>
   </div>
@@ -172,6 +188,9 @@
       </button>
     </div>
     <div class="flex items-center gap-2.5">
+      <button id="btn-use-heal" class="hidden game-btn flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-emerald-600/90 hover:bg-emerald-500 border-2 border-emerald-300 text-white shadow-xl">
+        <span class="text-xl">💊</span><span class="text-[11px] font-black">回復使用</span>
+      </button>
       <button id="btn-shoot-mobile" class="hidden game-btn flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-rose-600/90 hover:bg-rose-500 border-2 border-rose-300 text-white shadow-xl">
         <span class="text-xl">🔫</span><span class="text-[11px] font-black">射撃</span>
       </button>
@@ -183,6 +202,29 @@
         <span id="skill-icon" class="text-2xl relative z-10">💨</span>
         <span id="skill-label" class="text-xs font-black relative z-10">ダッシュ</span>
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- バックパック（インベントリ）画面 -->
+<div id="inventory-overlay">
+  <div class="bg-slate-900/95 border-2 border-amber-400/70 rounded-3xl p-5 sm:p-6 max-w-2xl w-full shadow-2xl max-h-[88vh] overflow-y-auto">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+      <div>
+        <h2 class="text-xl font-black text-amber-300">🎒 バックパック（インベントリ）</h2>
+        <p class="text-[11px] text-slate-400">手持ち枠（1枠1アイテム）と各種弾薬を管理・ドロップできます</p>
+      </div>
+      <button id="btn-close-bag" class="game-btn px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-black text-white">✕ 閉じる [B]</button>
+    </div>
+
+    <div class="mb-5">
+      <div class="text-xs font-black text-sky-300 mb-2">手持ちスロット（5枠・1枠につき1アイテム）</div>
+      <div id="bag-hotbar-list" class="grid grid-cols-1 sm:grid-cols-5 gap-2"></div>
+    </div>
+
+    <div>
+      <div class="text-xs font-black text-amber-300 mb-2">弾薬ポーチ（クリックして弾を落とす）</div>
+      <div id="bag-ammo-list" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5"></div>
     </div>
   </div>
 </div>
@@ -279,14 +321,14 @@
 
     <div class="text-center mb-4">
       <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-xs font-bold text-amber-400 mb-2 animate-float">
-        <span>🌐 広大220mステージ＆障害物大量増設</span><span>•</span><span>5分サーバーマッチ途中参加</span>
+        <span>🌐 宝箱＆弾薬箱・5枠ホットバー・袋ドロップ</span><span>•</span><span>鬼ごっこ2分＆名前非表示ルール</span>
       </div>
       <h1 class="text-2xl sm:text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-amber-300 to-emerald-400 drop-shadow">3D 鬼ごっこ＆変身かくれんぼ＋FPS</h1>
     </div>
 
     <div class="flex gap-1 sm:gap-2 mb-4 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-700">
       <button class="mode-tab active flex-1 py-2 rounded-xl text-xs sm:text-sm font-black text-slate-300" data-mode="fps">⚔️ チームFPS</button>
-      <button class="mode-tab flex-1 py-2 rounded-xl text-xs sm:text-sm font-black text-slate-300" data-mode="tag">👹 鬼ごっこ</button>
+      <button class="mode-tab flex-1 py-2 rounded-xl text-xs sm:text-sm font-black text-slate-300" data-mode="tag">👹 鬼ごっこ（2分）</button>
       <button class="mode-tab flex-1 py-2 rounded-xl text-xs sm:text-sm font-black text-slate-300" data-mode="prophunt">🪴 かくれんぼ</button>
     </div>
 
@@ -295,16 +337,16 @@
       <div class="bg-slate-800/75 border-2 border-sky-500/40 rounded-2xl p-5">
         <div class="flex items-center justify-between mb-2">
           <span class="text-3xl">⚔️</span>
-          <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30">5分間サーバーマッチ・青赤自動配属</span>
+          <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30">宝箱・弾薬箱・5枠ホットバー</span>
         </div>
         <h2 class="text-xl font-black text-white mb-1">FPS チームバトルモード</h2>
         <p class="text-xs text-slate-300 leading-relaxed mb-3">
-          広くなったバトルアリーナで5分間の試合を開催！<strong>途中参加しても現在の残り時間のまま合流</strong>し、<strong>人間プレイヤーを優先</strong>して青・赤チームに自動配属します。
+          <strong>敵の名前は非表示</strong>！ランダム出現する<strong>宝箱</strong>（銃1・回復2・弾70発1種）や<strong>弾薬箱</strong>（全弾60発）を回収しよう。初期手持ちは5枠（1枠目にライフル、2枠目に25HP回復）。<strong>[G]で手持ちを落とす</strong>、<strong>[B]で袋から弾も落とせる</strong>！
         </p>
         <div class="grid grid-cols-3 gap-2 mb-4 text-[10px] text-center">
-          <div class="bg-sky-900/40 border border-sky-500/40 rounded-lg py-1.5"><span class="block text-sky-300 font-black text-sm">👤 人間優先</span>参加者が増えるとBot自動退場</div>
-          <div class="bg-amber-900/40 border border-amber-500/40 rounded-lg py-1.5"><span class="block text-amber-300 font-black text-sm">⏱️ 5分マッチ</span>途中参加も進行時間を共有</div>
-          <div class="bg-rose-900/40 border border-rose-500/40 rounded-lg py-1.5"><span class="block text-rose-300 font-black text-sm">🧱 完全遮蔽判定</span>壁裏の敵や弾貫通を防止</div>
+          <div class="bg-sky-900/40 border border-sky-500/40 rounded-lg py-1.5"><span class="block text-sky-300 font-black text-sm">📦 ランダム宝箱</span>銃1+回復2+弾70発</div>
+          <div class="bg-amber-900/40 border border-amber-500/40 rounded-lg py-1.5"><span class="block text-amber-300 font-black text-sm">🔋 弾薬箱</span>全種類の弾60発ずつ</div>
+          <div class="bg-rose-900/40 border border-rose-500/40 rounded-lg py-1.5"><span class="block text-rose-300 font-black text-sm">🎒 5枠＆袋</span>1枠1個・弾もドロップ</div>
         </div>
         <button id="start-fps-btn" class="game-btn glow-sky w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-600 via-indigo-500 to-rose-500 hover:opacity-95 text-white font-black text-base">⚔️ オンラインFPSサーバーへ参加！</button>
       </div>
@@ -315,15 +357,15 @@
       <div class="bg-slate-800/75 border-2 border-rose-500/40 rounded-2xl p-5">
         <div class="flex items-center justify-between mb-2">
           <span class="text-3xl">👹</span>
-          <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30">接触ダメージ＆鬼3秒スタン</span>
+          <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30">試合時間2分・接触ダメージ＆鬼3秒スタン</span>
         </div>
-        <h2 class="text-xl font-black text-white mb-1">3D 鬼ごっこモード</h2>
-        <p class="text-xs text-slate-300 leading-relaxed mb-4">障害物が増えた広大な公園ステージで追跡＆逃走！鬼が逃げる側に触れると<strong>確実にダメージ</strong>が入り、触れた鬼は<strong>3秒間動けなく</strong>なります。</p>
+        <h2 class="text-xl font-black text-white mb-1">3D 鬼ごっこモード（2分間）</h2>
+        <p class="text-xs text-slate-300 leading-relaxed mb-4">試合時間は<strong>2分（120秒）</strong>！鬼が逃げる側に触れると<strong>確実にダメージ</strong>が入り、触れた鬼は<strong>3秒間動けなく</strong>なります。</p>
         <div class="flex bg-slate-950/90 p-1 rounded-xl border border-slate-700 mb-3">
           <button id="tag-role-runner" class="flex-1 py-1.5 rounded-lg text-xs font-black bg-sky-600 text-white">🏃 逃走者</button>
           <button id="tag-role-seeker" class="flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400">👹 鬼</button>
         </div>
-        <button id="start-tag-btn" class="game-btn glow-red w-full py-3 rounded-xl bg-gradient-to-r from-rose-600 to-orange-500 hover:from-rose-500 hover:to-orange-400 text-white font-black text-base">3D 鬼ごっこサーバーへ参加！</button>
+        <button id="start-tag-btn" class="game-btn glow-red w-full py-3 rounded-xl bg-gradient-to-r from-rose-600 to-orange-500 hover:from-rose-500 hover:to-orange-400 text-white font-black text-base">3D 鬼ごっこ（2分）へ参加！</button>
       </div>
     </div>
 
@@ -332,12 +374,12 @@
       <div class="bg-slate-800/75 border-2 border-emerald-500/40 rounded-2xl p-5">
         <div class="flex items-center justify-between mb-2">
           <span class="text-3xl">🪴</span>
-          <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">30秒隠れタイム・鬼は銃攻撃</span>
+          <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">隠れる側名前非表示・30秒隠れタイム</span>
         </div>
         <h2 class="text-xl font-black text-white mb-1">3D 変身かくれんぼ</h2>
-        <p class="text-xs text-slate-300 leading-relaxed mb-4">最初の<strong>30秒間</strong>は鬼が別空間で待機！隠れる側は大量の障害物・小道具に<strong>[E]で変身</strong>して隠れよう。30秒後に鬼が試合場へテレポートし、<strong>銃</strong>で変身した相手を狙い撃ちます！</p>
+        <p class="text-xs text-slate-300 leading-relaxed mb-4"><strong>隠れる側の名前は非表示</strong>！最初の<strong>30秒間</strong>は鬼が別空間で待機し、隠れる側は小道具に変身して隠れます。30秒後に鬼が試合場へテレポートし、<strong>銃</strong>で変身中の相手を狙い撃ちます！</p>
         <div class="flex bg-slate-950/90 p-1 rounded-xl border border-slate-700 mb-3">
-          <button id="ph-role-hider" class="flex-1 py-1.5 rounded-lg text-xs font-black bg-emerald-600 text-white">🪴 隠れる側</button>
+          <button id="ph-role-hider" class="flex-1 py-1.5 rounded-lg text-xs font-black bg-emerald-600 text-white">🪴 隠れる側（名前非表示）</button>
           <button id="ph-role-seeker" class="flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400">🔫 鬼側（銃攻撃）</button>
         </div>
         <button id="start-prophunt-btn" class="game-btn glow-emerald w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-base">3D かくれんぼサーバーへ参加！</button>
@@ -346,10 +388,10 @@
 
     <div class="bg-slate-950/75 border border-slate-800 rounded-2xl p-3.5 mt-4 text-xs text-slate-300">
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-amber-400 font-black block">移動/視点</span>WASD / マウス</div>
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-teal-400 font-black block">ジャンプ</span>Space</div>
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-emerald-400 font-black block">変身/固定</span>E / F</div>
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-sky-400 font-black block">銃撃/リロード</span>クリック / R</div>
+        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-amber-400 font-black block">枠切替/回復</span>1〜5 / H / クリック</div>
+        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-rose-400 font-black block">手持ちを落とす</span>G キー / 落とすボタン</div>
+        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-sky-400 font-black block">袋（弾ドロップ）</span>B キー / Tab / 袋ボタン</div>
+        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-emerald-400 font-black block">箱回収/変身</span>E キー / 近づく</div>
       </div>
     </div>
   </div>
@@ -360,7 +402,7 @@
   <div class="max-w-md w-full bg-slate-900 border-2 border-slate-700 rounded-3xl p-6 sm:p-8 text-center shadow-2xl">
     <div id="result-emoji" class="text-6xl mb-3">🏆</div>
     <h2 id="result-title" class="text-2xl sm:text-3xl font-black text-white mb-1">試合終了！</h2>
-    <p id="result-subtitle" class="text-xs sm:text-sm text-slate-400 mb-6">次の5分マッチがすぐ開始できます！</p>
+    <p id="result-subtitle" class="text-xs sm:text-sm text-slate-400 mb-6">次の試合がすぐ開始できます！</p>
     <div class="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 mb-6 space-y-2.5">
       <div class="flex justify-between items-center text-sm">
         <span class="text-slate-400 font-bold">個人スコア</span>
@@ -419,12 +461,52 @@
 // ==========================================
 // セッション管理＆サーバー定数
 // ==========================================
-const STORAGE_KEY = 'dggm_online_session_v4';
-const MATCH_DURATION_SEC = 300; // 5分間のサーバー試合
-const HIDE_PHASE_SEC = 30;      // かくれんぼの隠れタイム30秒
-const SERVER_MAX_CAPACITY = 16; // 1サーバーあたりの定員（16人未満なら全員同一サーバーへ自動集約）
-const ARENA_HALF = 110;         // 拡張された広大ステージ（220m x 220m）
-const VOID_ROOM_POS = { x: 0, y: 140, z: 320 }; // かくれんぼ30秒間、鬼が待機する別空間
+const STORAGE_KEY = 'dggm_online_session_v5';
+const FPS_MATCH_DURATION_SEC = 300; // FPS 5分間
+const TAG_MATCH_DURATION_SEC = 120; // 鬼ごっこ 2分間（120秒）
+const PH_MATCH_DURATION_SEC  = 240; // かくれんぼ 4分間
+const HIDE_PHASE_SEC = 30;          // かくれんぼ隠れタイム30秒
+const SERVER_MAX_CAPACITY = 16;
+const ARENA_HALF = 110;
+const VOID_ROOM_POS = { x: 0, y: 140, z: 320 };
+
+function getDurationForMode(mode){
+  if(mode === 'tag') return TAG_MATCH_DURATION_SEC;
+  if(mode === 'prophunt') return PH_MATCH_DURATION_SEC;
+  return FPS_MATCH_DURATION_SEC;
+}
+
+// 銃・回復・弾薬の定義
+const WEAPON_DEFS = {
+  rifle: {
+    id:'rifle', name:'アサルトライフル', icon:'🔫', ammoType:'rifle',
+    magSize:20, fireCooldown:0.14, damageBody:25, damageHead:50, color:0x38bdf8
+  },
+  smg: {
+    id:'smg', name:'サブマシンガン', icon:'⚡', ammoType:'smg',
+    magSize:30, fireCooldown:0.085, damageBody:15, damageHead:30, color:0xfbbf24
+  },
+  shotgun: {
+    id:'shotgun', name:'ショットガン', icon:'💥', ammoType:'shotgun',
+    magSize:8, fireCooldown:0.55, damageBody:65, damageHead:95, color:0xf97316
+  },
+  sniper: {
+    id:'sniper', name:'スナイパー', icon:'🎯', ammoType:'sniper',
+    magSize:5, fireCooldown:0.85, damageBody:85, damageHead:150, color:0xa855f7
+  }
+};
+
+const HEAL_DEFS = {
+  heal25: { id:'heal25', name:'回復(25HP)', icon:'🩹', healAmount:25 },
+  heal50: { id:'heal50', name:'回復(50HP)', icon:'💊', healAmount:50 }
+};
+
+const AMMO_DEFS = {
+  rifle:   { id:'rifle',   name:'ライフル弾', icon:'🔹' },
+  smg:     { id:'smg',     name:'SMG弾',      icon:'🔸' },
+  shotgun: { id:'shotgun', name:'SG弾',       icon:'🟥' },
+  sniper:  { id:'sniper',  name:'SR弾',       icon:'🟪' }
+};
 
 function loadSession(){
   try{
@@ -474,7 +556,7 @@ class SoundEngine {
     const tempo = mode==='fps'?180:(mode==='tag'?210:280);
     const notes = mode==='fps'?[196,246.94,293.66,392,293.66,246.94,220,293.66]:[261.63,329.63,392,523.25,392,329.63,293.66,392];
     this.bgmTimer=setInterval(()=>{
-      if(this.muted||gameState.screen!=='playing'||gameState.paused)return;
+      if(this.muted||gameState.screen!=='playing'||gameState.paused||gameState.bagOpen)return;
       const f=notes[this.bgmStep%notes.length];
       this.playTone(f,mode==='fps'?'square':'triangle',0.15,0.035);
       this.bgmStep++;
@@ -487,7 +569,9 @@ class SoundEngine {
   playMorph(){this.playTone(340,'sine',0.12,0.25,760);}
   playLock(l){this.playTone(l?540:620,'sine',0.12,0.18,l?740:420);}
   playTaunt(){[659.25,783.99,1046.5].forEach((n,i)=>setTimeout(()=>this.playTone(n,'sine',0.13,0.22),i*90));}
-  playCoin(){this.playTone(987.77,'sine',0.08,0.16);setTimeout(()=>this.playTone(1318.51,'sine',0.16,0.16),60);}
+  playPickup(){this.playTone(880,'sine',0.08,0.18);setTimeout(()=>this.playTone(1174.66,'sine',0.14,0.18),65);}
+  playHeal(){this.playTone(523.25,'sine',0.12,0.2);setTimeout(()=>this.playTone(783.99,'sine',0.2,0.2),90);}
+  playDrop(){this.playTone(420,'triangle',0.1,0.16,220);}
   playHit(){this.playTone(150,'sawtooth',0.35,0.32,48);}
   playStun(){this.playTone(220,'sawtooth',0.4,0.25,95);}
   playTeleport(){this.playTone(440,'sine',0.25,0.22,1200);}
@@ -681,8 +765,19 @@ function animateCharacter(charMesh,dt,moveSpeed,isGrounded){
 }
 
 // ==========================================
-// ロブロックス風 頭上ネームタグ＆HPバー
+// ロブロックス風 頭上ネームタグ（かくれんぼ隠れる側・FPS敵は非表示）
 // ==========================================
+function shouldShowNametagForRemote(remotePlayerData){
+  if(!remotePlayerData) return false;
+  if(gameState.mode === 'prophunt'){
+    if(remotePlayerData.role !== 'seeker') return false;
+  }
+  if(gameState.mode === 'fps'){
+    if(remotePlayerData.team && remotePlayerData.team !== gameState.fps.team) return false;
+  }
+  return true;
+}
+
 function createRobloxNametagSprite(username, team=null, hp=100, maxHp=100){
   const canvas=document.createElement('canvas');
   canvas.width=320;canvas.height=88;
@@ -735,15 +830,18 @@ function roundRect(ctx, x, y, w, h, r){
   ctx.closePath();
 }
 
-function attachNametag(mesh, text, team=null, hp=100, maxHp=100, yOffset=2.75){
+function attachNametag(mesh, text, team=null, hp=100, maxHp=100, yOffset=2.75, visible=true){
   if(!mesh)return null;
   if(mesh.userData.nametag){
     mesh.userData.nametag.position.set(0, yOffset, 0);
+    mesh.userData.nametag.visible = visible;
     updateRobloxNametag(mesh.userData.nametag, text, team, hp, maxHp);
     return mesh.userData.nametag;
   }
   const tag=createRobloxNametagSprite(text, team, hp, maxHp);
-  tag.position.set(0, yOffset, 0);mesh.add(tag);mesh.userData.nametag=tag;
+  tag.position.set(0, yOffset, 0);
+  tag.visible = visible;
+  mesh.add(tag);mesh.userData.nametag=tag;
   return tag;
 }
 
@@ -777,57 +875,479 @@ window.addEventListener('resize',()=>{
 });
 
 // ==========================================
-// Game State
+// Game State & フォートナイト風5スロットホットバー＆弾薬ポーチ
 // ==========================================
 const gameState={
   screen:'auth',mode:'fps',tagRole:'runner',phRole:'hider',
-  timer:MATCH_DURATION_SEC,score:0,hp:3,maxHp:3,invulnTimer:0,lastTime:0,
+  timer:FPS_MATCH_DURATION_SEC,score:0,hp:3,maxHp:3,invulnTimer:0,lastTime:0,
   paused:false,
-  seekerStunTimer:0,          // 鬼ごっこ：逃げる側に触れた後の鬼スタン時間（3秒）
-  prophuntSeekerDeployed:false,// かくれんぼ：30秒経過して鬼が試合場にテレポート済みか
+  bagOpen:false,
+  seekerStunTimer:0,
+  prophuntSeekerDeployed:false,
+  chestSpawnTimer:6.0,
+  ammoCrateSpawnTimer:9.0,
   stats:{morphCount:0,tauntCount:0,coinsCollected:0,tagsMade:0,kills:0,deaths:0},
   fps:{
     team:'blue',
     hp:100, maxHp:100,
     blueScore:0, redScore:0,
     respawnTimer:0,
-    reloadTimer:0, magSize:15, ammo:15, fireCooldown:0, recoil:0
+    reloadTimer:0, fireCooldown:0, recoil:0,
+    selectedSlot:0,
+    // 5マス（1枠につき1アイテム）：初期状態で1枠目にライフル、2枠目に回復(HP25)、残り3枠は空
+    slots:[
+      { kind:'weapon', itemId:'rifle' },
+      { kind:'heal',   itemId:'heal25' },
+      null,
+      null,
+      null
+    ],
+    // 各種弾薬所持数（初期値）
+    ammoPool:{
+      rifle:70,
+      smg:60,
+      shotgun:30,
+      sniper:20
+    },
+    // 各武器のマガジン残弾
+    magAmmo:{
+      rifle:20,
+      smg:30,
+      shotgun:8,
+      sniper:5
+    }
   }
 };
 
-const camCtrl={yaw:0,pitch:0.38,dist:6.2,targetDist:6.2,lastX:0,lastY:0,touchId:null};
+function getCurrentWeaponDef(){
+  const slot = gameState.fps.slots[gameState.fps.selectedSlot];
+  if(slot && slot.kind === 'weapon' && WEAPON_DEFS[slot.itemId]){
+    return WEAPON_DEFS[slot.itemId];
+  }
+  return null;
+}
 
-const player={
-  pos:new THREE.Vector3(0,0,18),vel:new THREE.Vector3(0,0,0),
-  rotY:0,radius:0.48,height:1.7,onGround:true,
-  speed:9.6,jumpForce:11.8,skillCooldown:0,skillMaxCooldown:2.8,
-  dashTimer:0,tauntCooldown:0,disguise:null,locked:false,lockedRotY:0,
-  targetedProp:null,mesh:null,weaponMesh:null,
-  fpsYaw:Math.PI,fpsPitch:0,moveSpeed:0
-};
+function getCurrentHealDef(){
+  const slot = gameState.fps.slots[gameState.fps.selectedSlot];
+  if(slot && slot.kind === 'heal' && HEAL_DEFS[slot.itemId]){
+    return HEAL_DEFS[slot.itemId];
+  }
+  return null;
+}
 
-let worldGroup=new THREE.Group();
-scene.add(worldGroup);
-let colliders=[];
-let propsList=[];
-let jumpPads=[];
-let coinsList=[];
-let seekersList=[];
-let runnersList=[];
-let fxList=[];
-let remotePlayers={};
-let fpsBots=[];
+function addItemToHotbar(kind, itemId){
+  const emptyIdx = gameState.fps.slots.findIndex(s => s === null);
+  if(emptyIdx === -1){
+    pushToast('⚠️ 5枠すべて埋まっています！アイテムを落とすか空きを作ってください','text-rose-300');
+    return false;
+  }
+  gameState.fps.slots[emptyIdx] = { kind, itemId };
+  if(kind === 'weapon' && WEAPON_DEFS[itemId]){
+    gameState.fps.magAmmo[itemId] = WEAPON_DEFS[itemId].magSize;
+  }
+  renderHotbarUI();
+  rebuildGunMeshForCurrentSlot();
+  return true;
+}
 
-const keys={};
-const joystick={active:false,dx:0,dy:0,touchId:null};
-const raycaster=new THREE.Raycaster();
+function useSelectedHeal(){
+  if(gameState.mode !== 'fps' || gameState.screen !== 'playing' || gameState.paused || gameState.fps.respawnTimer > 0) return;
+  const idx = gameState.fps.selectedSlot;
+  const slot = gameState.fps.slots[idx];
+  if(!slot || slot.kind !== 'heal' || !HEAL_DEFS[slot.itemId]) return;
+  if(gameState.fps.hp >= gameState.fps.maxHp){
+    pushToast('❤️ すでにHPは満タンです！','text-emerald-300');
+    return;
+  }
+  const hDef = HEAL_DEFS[slot.itemId];
+  gameState.fps.hp = Math.min(gameState.fps.maxHp, gameState.fps.hp + hDef.healAmount);
+  gameState.fps.slots[idx] = null; // 1枠1個なので使用したら枠が空く
+  sound.playHeal();
+  pushToast(`💚 ${hDef.name} を使用！ HP+${hDef.healAmount}（現在 ${gameState.fps.hp}）`,'text-emerald-300');
+  renderHotbarUI();
+  updateFPSHUD();
+}
+
+function dropHotbarSlotItem(slotIndex){
+  if(gameState.mode !== 'fps' || gameState.screen !== 'playing' || gameState.paused) return;
+  const slot = gameState.fps.slots[slotIndex];
+  if(!slot) return;
+
+  const def = slot.kind === 'weapon' ? WEAPON_DEFS[slot.itemId] : HEAL_DEFS[slot.itemId];
+  if(!def) return;
+
+  const forward = new THREE.Vector3(-Math.sin(player.fpsYaw), 0, -Math.cos(player.fpsYaw));
+  const dropPos = player.pos.clone().addScaledVector(forward, 1.8);
+  dropPos.y = 0;
+
+  spawnDroppedWorldItem(slot.kind, slot.itemId, 1, dropPos.x, dropPos.z);
+  gameState.fps.slots[slotIndex] = null;
+  sound.playDrop();
+  pushToast(`📤 ${def.name} をドロップしました`,'text-amber-300');
+  renderHotbarUI();
+  rebuildGunMeshForCurrentSlot();
+  if(gameState.bagOpen) renderBagUI();
+}
+
+function dropAmmoType(ammoType, amount=30){
+  if(gameState.mode !== 'fps' || gameState.screen !== 'playing' || gameState.paused) return;
+  const current = gameState.fps.ammoPool[ammoType] || 0;
+  if(current <= 0){
+    pushToast('⚠️ 落とせる弾薬がありません','text-rose-300');
+    return;
+  }
+  const dropCount = Math.min(current, amount);
+  gameState.fps.ammoPool[ammoType] = current - dropCount;
+
+  const forward = new THREE.Vector3(-Math.sin(player.fpsYaw), 0, -Math.cos(player.fpsYaw));
+  const dropPos = player.pos.clone().addScaledVector(forward, 1.8);
+  dropPos.y = 0;
+
+  spawnDroppedWorldItem('ammo', ammoType, dropCount, dropPos.x, dropPos.z);
+  sound.playDrop();
+  pushToast(`📤 ${AMMO_DEFS[ammoType].name} ×${dropCount} をドロップしました`,'text-amber-300');
+  updateFPSHUD();
+  if(gameState.bagOpen) renderBagUI();
+}
+
+function selectHotbarSlot(index){
+  if(index < 0 || index > 4) return;
+  gameState.fps.selectedSlot = index;
+  renderHotbarUI();
+  rebuildGunMeshForCurrentSlot();
+  updateFPSHUD();
+}
+
+function renderHotbarUI(){
+  const containerEl = document.getElementById('hotbar-slots');
+  if(!containerEl) return;
+  containerEl.innerHTML = '';
+
+  for(let i=0; i<5; i++){
+    const slot = gameState.fps.slots[i];
+    const isSelected = (gameState.fps.selectedSlot === i);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `hotbar-slot relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-900/90 border-2 ${isSelected ? 'selected border-amber-400' : 'border-slate-700'} flex flex-col items-center justify-center transition-all cursor-pointer`;
+    btn.innerHTML = `<span class="absolute top-0.5 left-1.5 text-[10px] font-black text-slate-400">${i+1}</span>`;
+
+    if(!slot){
+      btn.innerHTML += `<span class="text-[10px] font-bold text-slate-600">空き</span>`;
+    } else if(slot.kind === 'weapon' && WEAPON_DEFS[slot.itemId]){
+      const w = WEAPON_DEFS[slot.itemId];
+      btn.innerHTML += `<span class="text-xl leading-none">${w.icon}</span><span class="text-[9px] font-black text-sky-200 mt-1 truncate max-w-full px-1">${w.name.replace('アサルト','')}</span>`;
+    } else if(slot.kind === 'heal' && HEAL_DEFS[slot.itemId]){
+      const h = HEAL_DEFS[slot.itemId];
+      btn.innerHTML += `<span class="text-xl leading-none">${h.icon}</span><span class="text-[9px] font-black text-emerald-300 mt-1">${h.healAmount}HP</span>`;
+    }
+
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      selectHotbarSlot(i);
+      const curSlot = gameState.fps.slots[i];
+      if(curSlot && curSlot.kind === 'heal'){
+        useSelectedHeal();
+      }
+    });
+    containerEl.appendChild(btn);
+  }
+}
+
+function openBagModal(){
+  if(gameState.mode !== 'fps' || gameState.screen !== 'playing' || gameState.paused) return;
+  gameState.bagOpen = true;
+  leavePlayingMode();
+  renderBagUI();
+  document.getElementById('inventory-overlay').classList.add('show');
+}
+
+function closeBagModal(){
+  if(!gameState.bagOpen) return;
+  gameState.bagOpen = false;
+  document.getElementById('inventory-overlay').classList.remove('show');
+  enterPlayingMode();
+  gameState.lastTime = performance.now();
+}
+
+function renderBagUI(){
+  const hbList = document.getElementById('bag-hotbar-list');
+  const ammoList = document.getElementById('bag-ammo-list');
+  hbList.innerHTML = '';
+  ammoList.innerHTML = '';
+
+  for(let i=0; i<5; i++){
+    const slot = gameState.fps.slots[i];
+    const card = document.createElement('div');
+    card.className = 'p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col justify-between gap-2';
+    if(!slot){
+      card.innerHTML = `<div class="text-xs font-black text-slate-500">枠 ${i+1}：空き</div><div class="text-[10px] text-slate-600">1枠1アイテム</div>`;
+    } else {
+      const def = slot.kind === 'weapon' ? WEAPON_DEFS[slot.itemId] : HEAL_DEFS[slot.itemId];
+      card.innerHTML = `
+        <div>
+          <div class="text-[10px] text-slate-400 font-bold">枠 ${i+1}</div>
+          <div class="text-xs font-black text-white">${def.icon} ${def.name}</div>
+        </div>
+        <button class="game-btn w-full py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-[10px] font-black text-white">落とす</button>
+      `;
+      card.querySelector('button').addEventListener('click', ()=>{
+        dropHotbarSlotItem(i);
+      });
+    }
+    hbList.appendChild(card);
+  }
+
+  Object.entries(AMMO_DEFS).forEach(([key, aDef])=>{
+    const count = gameState.fps.ammoPool[key] || 0;
+    const card = document.createElement('div');
+    card.className = 'p-3 rounded-xl bg-slate-950 border border-slate-800 flex flex-col justify-between gap-2';
+    card.innerHTML = `
+      <div>
+        <div class="text-xs font-black text-amber-300">${aDef.icon} ${aDef.name}</div>
+        <div class="text-lg font-black text-white tabular-nums">${count} <span class="text-xs text-slate-400">発</span></div>
+      </div>
+      <div class="flex gap-1.5">
+        <button data-drop="30" class="game-btn flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[10px] font-black text-amber-200">30発落とす</button>
+        <button data-drop="9999" class="game-btn flex-1 py-1.5 rounded-lg bg-rose-900/80 hover:bg-rose-800 border border-rose-500/40 text-[10px] font-black text-rose-200">全弾落とす</button>
+      </div>
+    `;
+    card.querySelectorAll('button').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        dropAmmoType(key, Number(b.dataset.drop));
+      });
+    });
+    ammoList.appendChild(card);
+  });
+}
+
+// ==========================================
+// 3D 宝箱・弾薬箱・ドロップアイテム管理
+// ==========================================
+let supplyChests = [];
+let ammoCrates = [];
+let droppedWorldItems = [];
+
+function spawnSupplyChestAtRandom(){
+  if(gameState.mode !== 'fps' || supplyChests.length >= 8) return;
+  const x = (Math.random() - 0.5) * 180;
+  const z = (Math.random() - 0.5) * 180;
+  if(Math.hypot(x, z) < 8) return;
+
+  const group = new THREE.Group();
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5, 1.0, 1.1),
+    new THREE.MeshStandardMaterial({color:0xd97706, roughness:0.4, metalness:0.5})
+  );
+  base.position.y = 0.5; base.castShadow = true; group.add(base);
+
+  const lid = new THREE.Mesh(
+    new THREE.BoxGeometry(1.56, 0.35, 1.16),
+    new THREE.MeshStandardMaterial({color:0xfbbf24, emissive:0xd97706, emissiveIntensity:0.35, roughness:0.3, metalness:0.6})
+  );
+  lid.position.y = 1.12; lid.castShadow = true; group.add(lid);
+
+  const beacon = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.28, 0),
+    new THREE.MeshBasicMaterial({color:0xfef08a})
+  );
+  beacon.position.y = 1.85; group.add(beacon);
+
+  group.position.set(x, 0, z);
+  worldGroup.add(group);
+
+  const weaponKeys = Object.keys(WEAPON_DEFS);
+  const healKeys = Object.keys(HEAL_DEFS);
+  const ammoKeys = Object.keys(AMMO_DEFS);
+
+  const loot = {
+    weaponId: weaponKeys[Math.floor(Math.random() * weaponKeys.length)],
+    heals: [
+      healKeys[Math.floor(Math.random() * healKeys.length)],
+      healKeys[Math.floor(Math.random() * healKeys.length)]
+    ],
+    ammoType: ammoKeys[Math.floor(Math.random() * ammoKeys.length)],
+    ammoCount: 70
+  };
+
+  const chestObj = { mesh: group, beacon, x, z, loot, id: 'chest_' + Date.now() + '_' + Math.random() };
+  group.traverse(c=>{ if(c.isMesh) c.userData.pickupRef = { type:'chest', ref:chestObj }; });
+  supplyChests.push(chestObj);
+  pushToast('📦 新しいランダム宝箱が出現しました！','text-amber-300');
+}
+
+function spawnAmmoCrateAtRandom(){
+  if(gameState.mode !== 'fps' || ammoCrates.length >= 8) return;
+  const x = (Math.random() - 0.5) * 180;
+  const z = (Math.random() - 0.5) * 180;
+  if(Math.hypot(x, z) < 8) return;
+
+  const group = new THREE.Group();
+  const box = new THREE.Mesh(
+    new THREE.BoxGeometry(1.4, 0.9, 1.1),
+    new THREE.MeshStandardMaterial({color:0x0284c7, roughness:0.45, metalness:0.4})
+  );
+  box.position.y = 0.45; box.castShadow = true; group.add(box);
+
+  const band = new THREE.Mesh(
+    new THREE.BoxGeometry(1.44, 0.22, 1.14),
+    new THREE.MeshStandardMaterial({color:0x38bdf8, emissive:0x0369a1, emissiveIntensity:0.5})
+  );
+  band.position.y = 0.65; group.add(band);
+
+  const beacon = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.25, 0),
+    new THREE.MeshBasicMaterial({color:0x7dd3fc})
+  );
+  beacon.position.y = 1.65; group.add(beacon);
+
+  group.position.set(x, 0, z);
+  worldGroup.add(group);
+
+  const crateObj = { mesh: group, beacon, x, z, ammoEach: 60, id: 'ammo_' + Date.now() + '_' + Math.random() };
+  group.traverse(c=>{ if(c.isMesh) c.userData.pickupRef = { type:'ammoCrate', ref:crateObj }; });
+  ammoCrates.push(crateObj);
+  pushToast('🔋 新しい弾薬箱（全弾60発）が出現しました！','text-sky-300');
+}
+
+function spawnDroppedWorldItem(kind, itemId, count, x, z){
+  const color = kind === 'weapon' ? 0x38bdf8 : (kind === 'heal' ? 0x22c55e : 0xfbbf24);
+  const group = new THREE.Group();
+  const orb = new THREE.Mesh(
+    new THREE.BoxGeometry(0.75, 0.55, 0.75),
+    new THREE.MeshStandardMaterial({color, emissive:color, emissiveIntensity:0.45, roughness:0.35})
+  );
+  orb.position.y = 0.35; orb.castShadow = true; group.add(orb);
+  group.position.set(x, 0, z);
+  worldGroup.add(group);
+
+  const dropObj = { mesh: group, kind, itemId, count, x, z, age:0 };
+  group.traverse(c=>{ if(c.isMesh) c.userData.pickupRef = { type:'drop', ref:dropObj }; });
+  droppedWorldItems.push(dropObj);
+}
+
+function openSupplyChest(chestObj){
+  const idx = supplyChests.indexOf(chestObj);
+  if(idx === -1) return;
+  worldGroup.remove(chestObj.mesh);
+  supplyChests.splice(idx, 1);
+
+  const { weaponId, heals, ammoType, ammoCount } = chestObj.loot;
+  const wDef = WEAPON_DEFS[weaponId];
+  const aDef = AMMO_DEFS[ammoType];
+
+  const addedGun = addItemToHotbar('weapon', weaponId);
+  let addedHealCount = 0;
+  heals.forEach(hId=>{
+    if(addItemToHotbar('heal', hId)) addedHealCount++;
+  });
+  gameState.fps.ammoPool[ammoType] = (gameState.fps.ammoPool[ammoType] || 0) + ammoCount;
+
+  sound.playPickup();
+  updateFPSHUD();
+  const healNames = heals.map(id=>HEAL_DEFS[id].name).join('＆');
+  pushToast(
+    `🎁 宝箱獲得！ ${wDef.icon}${wDef.name}${addedGun?'':'(枠満)'} / ${healNames}(${addedHealCount}個獲得) / ${aDef.name}+${ammoCount}発`,
+    'text-amber-300'
+  );
+}
+
+function openAmmoCrate(crateObj){
+  const idx = ammoCrates.indexOf(crateObj);
+  if(idx === -1) return;
+  worldGroup.remove(crateObj.mesh);
+  ammoCrates.splice(idx, 1);
+
+  Object.keys(AMMO_DEFS).forEach(k=>{
+    gameState.fps.ammoPool[k] = (gameState.fps.ammoPool[k] || 0) + crateObj.ammoEach;
+  });
+
+  sound.playPickup();
+  updateFPSHUD();
+  pushToast(`🔋 弾薬箱獲得！ 全種類の弾を${crateObj.ammoEach}発ずつ入手！`,'text-sky-300');
+}
+
+function collectDroppedItem(dropObj){
+  const idx = droppedWorldItems.indexOf(dropObj);
+  if(idx === -1) return;
+
+  if(dropObj.kind === 'ammo'){
+    gameState.fps.ammoPool[dropObj.itemId] = (gameState.fps.ammoPool[dropObj.itemId] || 0) + dropObj.count;
+    worldGroup.remove(dropObj.mesh);
+    droppedWorldItems.splice(idx, 1);
+    sound.playPickup();
+    updateFPSHUD();
+    pushToast(`🔹 ${AMMO_DEFS[dropObj.itemId].name} ×${dropObj.count} を回収！`,'text-amber-300');
+  } else {
+    if(addItemToHotbar(dropObj.kind, dropObj.itemId)){
+      worldGroup.remove(dropObj.mesh);
+      droppedWorldItems.splice(idx, 1);
+      sound.playPickup();
+      const def = dropObj.kind === 'weapon' ? WEAPON_DEFS[dropObj.itemId] : HEAL_DEFS[dropObj.itemId];
+      pushToast(`✨ ${def.icon}${def.name} を手持ちに回収！`,'text-emerald-300');
+    }
+  }
+}
+
+function updatePickupsAndProximity(dt){
+  const time = performance.now() * 0.003;
+  supplyChests.forEach(c=>{ if(c.beacon) c.beacon.rotation.y = time; });
+  ammoCrates.forEach(c=>{ if(c.beacon) c.beacon.rotation.y = -time; });
+
+  // 近づいたドロップアイテムを自動回収（少し経過してから）
+  for(let i=droppedWorldItems.length-1; i>=0; i--){
+    const d = droppedWorldItems[i];
+    d.age += dt;
+    if(d.age > 0.8 && Math.hypot(player.pos.x - d.x, player.pos.z - d.z) < 2.2){
+      collectDroppedItem(d);
+    }
+  }
+
+  // 照準先または近距離の宝箱・弾薬箱プロンプト表示
+  let nearPickup = null;
+  for(const c of supplyChests){
+    if(Math.hypot(player.pos.x - c.x, player.pos.z - c.z) < 3.4){
+      nearPickup = { type:'chest', ref:c, label:'宝箱を開ける（銃1・回復2・弾70発）' };
+      break;
+    }
+  }
+  if(!nearPickup){
+    for(const ac of ammoCrates){
+      if(Math.hypot(player.pos.x - ac.x, player.pos.z - ac.z) < 3.4){
+        nearPickup = { type:'ammoCrate', ref:ac, label:'弾薬箱を開ける（全弾60発ずつ）' };
+        break;
+      }
+    }
+  }
+
+  const promptEl=document.getElementById('target-prompt'), promptText=document.getElementById('target-prompt-text');
+  if(nearPickup){
+    player.targetedPickup = nearPickup;
+    promptText.textContent = nearPickup.label;
+    promptEl.classList.remove('opacity-0');
+    return;
+  }
+  player.targetedPickup = null;
+}
+
+function triggerInteractE(){
+  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen) return;
+  if(player.targetedPickup){
+    if(player.targetedPickup.type === 'chest') openSupplyChest(player.targetedPickup.ref);
+    else if(player.targetedPickup.type === 'ammoCrate') openAmmoCrate(player.targetedPickup.ref);
+    player.targetedPickup = null;
+    return;
+  }
+  if(gameState.mode==='prophunt'&&gameState.phRole==='hider'){
+    triggerMorph();
+  }
+}
 
 // ==========================================
 // ポインターロック＆ESCメニュー（背景ぼかしなし）
 // ==========================================
 const canvasEl=renderer.domElement;
 function requestPointerLock(){
-  if(!document.pointerLockElement && gameState.screen==='playing' && !gameState.paused){
+  if(!document.pointerLockElement && gameState.screen==='playing' && !gameState.paused && !gameState.bagOpen){
     try{const p=canvasEl.requestPointerLock();if(p&&p.catch)p.catch(()=>{});}catch(e){}
   }
 }
@@ -835,34 +1355,43 @@ function exitPointerLock(){
   if(document.pointerLockElement){try{document.exitPointerLock();}catch(e){}}
 }
 function isPointerLocked(){return document.pointerLockElement===canvasEl;}
-function enterPlayingMode(){document.body.classList.add('cursor-hidden');requestPointerLock();hideClickHint();}
+function enterPlayingMode(){if(!gameState.bagOpen && !gameState.paused){document.body.classList.add('cursor-hidden');requestPointerLock();hideClickHint();}}
 function leavePlayingMode(){document.body.classList.remove('cursor-hidden');exitPointerLock();hideClickHint();}
 
 const clickHintEl=document.getElementById('click-hint');
-function showClickHint(){if(gameState.screen==='playing'&&!gameState.paused&&!isPointerLocked())clickHintEl.classList.add('show');}
+function showClickHint(){if(gameState.screen==='playing'&&!gameState.paused&&!gameState.bagOpen&&!isPointerLocked())clickHintEl.classList.add('show');}
 function hideClickHint(){clickHintEl.classList.remove('show');}
 
 function canUseGun(){
-  if(gameState.mode==='fps') return true;
+  if(gameState.mode==='fps'){
+    const wDef = getCurrentWeaponDef();
+    return Boolean(wDef);
+  }
   if(gameState.mode==='prophunt' && gameState.phRole==='seeker') return true;
   return false;
 }
 
 canvasEl.addEventListener('mousedown',(e)=>{
-  if(e.button!==0)return;
+  if(e.button!==0 || gameState.bagOpen)return;
   if(gameState.screen==='playing'&&!gameState.paused&&!isPointerLocked())requestPointerLock();
-  if(canUseGun()&&gameState.screen==='playing'&&!gameState.paused)shootGun();
+  if(gameState.screen==='playing'&&!gameState.paused){
+    if(gameState.mode==='fps' && getCurrentHealDef()){
+      useSelectedHeal();
+      return;
+    }
+    if(canUseGun()) shootGun();
+  }
 });
 
 document.addEventListener('pointerlockchange',()=>{
   if(isPointerLocked()){hideClickHint();document.body.classList.add('cursor-hidden');}
-  else if(gameState.screen==='playing'&&!gameState.paused){showClickHint();document.body.classList.remove('cursor-hidden');}
+  else if(gameState.screen==='playing'&&!gameState.paused&&!gameState.bagOpen){showClickHint();document.body.classList.remove('cursor-hidden');}
 });
 
 document.addEventListener('mousemove',(e)=>{
-  if(gameState.screen!=='playing'||gameState.paused||!isPointerLocked())return;
+  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen||!isPointerLocked())return;
   const dx=e.movementX||0, dy=e.movementY||0;
-  if(canUseGun()){
+  if(canUseGun() || gameState.mode==='fps'){
     player.fpsYaw-=dx*0.0022;
     player.fpsPitch=Math.max(-1.35,Math.min(1.35,player.fpsPitch-dy*0.0022));
   } else {
@@ -874,6 +1403,7 @@ document.addEventListener('mousemove',(e)=>{
 const pauseOverlay=document.getElementById('pause-overlay');
 function pauseGame(){
   if(gameState.screen!=='playing'||gameState.paused)return;
+  if(gameState.bagOpen){closeBagModal();return;}
   gameState.paused=true;leavePlayingMode();
   pauseOverlay.classList.add('show');
   document.getElementById('btn-pause').classList.add('hidden');
@@ -892,7 +1422,9 @@ document.getElementById('btn-pause-lobby').addEventListener('click',()=>{
 });
 window.addEventListener('keydown',(e)=>{
   if(e.code==='Escape'&&gameState.screen==='playing'){
-    e.preventDefault();if(gameState.paused)resumeGame();else pauseGame();
+    e.preventDefault();
+    if(gameState.bagOpen){closeBagModal();return;}
+    if(gameState.paused)resumeGame();else pauseGame();
   }
 });
 
@@ -1078,13 +1610,13 @@ function computeElapsedSeconds(matchObj){
   if(typeof matchObj.startedAt === 'number' && matchObj.startedAt > 0){
     return Math.max(0, (Date.now() - matchObj.startedAt) / 1000);
   }
-  const duration = matchObj.duration || MATCH_DURATION_SEC;
+  const duration = matchObj.duration || getDurationForMode(matchObj.mode);
   return Math.max(0, duration - (matchObj.timer || duration));
 }
 
 function computeRemainingSeconds(matchObj){
-  if(!matchObj || matchObj.status !== 'playing') return MATCH_DURATION_SEC;
-  const duration = matchObj.duration || MATCH_DURATION_SEC;
+  if(!matchObj || matchObj.status !== 'playing') return FPS_MATCH_DURATION_SEC;
+  const duration = matchObj.duration || getDurationForMode(matchObj.mode);
   return Math.max(0, duration - computeElapsedSeconds(matchObj));
 }
 
@@ -1106,7 +1638,7 @@ function refreshLobbyMatchUI(){
   const rem = computeRemainingSeconds(m);
   const isMatchActive = m && m.status === 'playing' && rem > 2 && (Date.now() - (m.heartbeatAt || m.updatedAt || 0) < 18000);
   if(isMatchActive){
-    const modeLabel = m.mode==='fps'?'チームFPS':(m.mode==='tag'?'鬼ごっこ':'変身かくれんぼ');
+    const modeLabel = m.mode==='fps'?'チームFPS':(m.mode==='tag'?'鬼ごっこ(2分)':'変身かくれんぼ');
     const min = Math.floor(rem / 60);
     const sec = Math.floor(rem % 60).toString().padStart(2, '0');
     badge.textContent='試合開催中';
@@ -1117,7 +1649,7 @@ function refreshLobbyMatchUI(){
   } else {
     badge.textContent='統合サーバー待機';
     badge.className='px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
-    titleEl.textContent=`[${APP.serverId}] 5分サーバーマッチ待機中（全員自動集約）`;
+    titleEl.textContent=`[${APP.serverId}] オンラインサーバー待機中（全員自動集約）`;
     quickBtn.classList.add('hidden');
   }
 }
@@ -1138,6 +1670,7 @@ function build3DWorld(mode){
   scene.add(worldGroup);
 
   colliders=[];propsList=[];jumpPads=[];coinsList=[];seekersList=[];runnersList=[];fxList=[];fpsBots=[];
+  supplyChests=[];ammoCrates=[];droppedWorldItems=[];
   Object.values(remotePlayers).forEach(rp=>{if(rp.mesh)worldGroup.remove(rp.mesh);});
   remotePlayers={};
 
@@ -1146,7 +1679,6 @@ function build3DWorld(mode){
     return;
   }
 
-  // 広大な公園ステージ（220m x 220m）
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(ARENA_HALF*2,ARENA_HALF*2),new THREE.MeshStandardMaterial({color:0x14532d,roughness:0.9}));
   ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;worldGroup.add(ground);
 
@@ -1162,7 +1694,6 @@ function build3DWorld(mode){
     m.position.set(pw.x,2.5,pw.z);m.castShadow=true;worldGroup.add(m);
   });
 
-  // ジャンプパッド（広大な220mマップに12箇所）
   [
     {x:-30,z:-45},{x:30,z:45},{x:-45,z:30},{x:45,z:-30},
     {x:-75,z:0},{x:75,z:0},{x:0,z:-75},{x:0,z:75},
@@ -1181,7 +1712,6 @@ function build3DWorld(mode){
   }
 }
 
-// かくれんぼで鬼が最初の30秒間待機する別空間ステージ
 function buildSeekerVoidRoom(){
   const vx = VOID_ROOM_POS.x, vy = VOID_ROOM_POS.y, vz = VOID_ROOM_POS.z;
   const roomFloor = new THREE.Mesh(
@@ -1210,7 +1740,6 @@ function buildSeekerVoidRoom(){
   });
 }
 
-// 鬼ごっこ用：障害物を大幅増設（220mマップ）
 function buildTagObstacles(){
   const addWall=(x,z,w,h,d,color)=>{
     const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:0.75}));
@@ -1224,7 +1753,6 @@ function buildTagObstacles(){
   addWall(0, -26, 24, 2.8, 3.0, 0x15803d);
   addWall(0,  26, 24, 2.8, 3.0, 0x15803d);
 
-  // 8箇所の大型コート・障害物エリア
   const areas = [
     {cx:-55,cz:-55},{cx:55,cz:-55},{cx:-55,cz:55},{cx:55,cz:55},
     {cx:-60,cz:0},{cx:60,cz:0},{cx:0,cz:-60},{cx:0,cz:60}
@@ -1238,27 +1766,26 @@ function buildTagObstacles(){
   let seed = 987654;
   const rand = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
 
-  for(let i=0; i<65; i++){
-    const bx = (rand() - 0.5) * 190;
-    const bz = (rand() - 0.5) * 190;
+  for(let i=0; i<75; i++){
+    const bx = (rand() - 0.5) * 195;
+    const bz = (rand() - 0.5) * 195;
     if(Math.hypot(bx, bz) < 10) continue;
-    const w = 3.5 + rand() * 6;
-    const d = 3.5 + rand() * 6;
+    const w = 3.5 + rand() * 6.5;
+    const d = 3.5 + rand() * 6.5;
     const h = 1.8 + rand() * 2.5;
     addWall(bx, bz, w, h, d, i%2===0 ? 0x57534e : 0x334155);
   }
 
   const propTypes = Object.keys(PROP_DEFS);
-  for(let i=0; i<60; i++){
+  for(let i=0; i<70; i++){
     const typeId = propTypes[i % propTypes.length];
-    const px = (rand() - 0.5) * 190;
-    const pz = (rand() - 0.5) * 190;
+    const px = (rand() - 0.5) * 195;
+    const pz = (rand() - 0.5) * 195;
     if(Math.hypot(px, pz) < 8) continue;
     spawnWorldProp(typeId, px, 0, pz, rand()*Math.PI*2, false);
   }
 }
 
-// かくれんぼ用：大量の障害物・建物・生垣・180個の小道具を広大220mマップに配置
 function buildPropHuntObstacles(){
   const addWall=(x,z,w,h,d,color)=>{
     const m=new THREE.Mesh(
@@ -1269,14 +1796,12 @@ function buildPropHuntObstacles(){
     addBoxCollider(x,z,w,d,h);
   };
 
-  // 1. 中央タワー・生垣迷路
   addWall(0, 0, 6.5, 3.2, 6.5, 0x475569);
   addWall(-24, 0, 2.8, 2.8, 24, 0x15803d);
   addWall( 24, 0, 2.8, 2.8, 24, 0x15803d);
   addWall(0, -24, 24, 2.8, 2.8, 0x15803d);
   addWall(0,  24, 24, 2.8, 2.8, 0x15803d);
 
-  // 2. 10箇所の大型倉庫・庭園ハウス＆登れる高台ブロック
   const zones = [
     {cx:-55, cz:-55}, {cx:55, cz:-55},
     {cx:-55, cz: 55}, {cx:55, cz: 55},
@@ -1292,7 +1817,6 @@ function buildPropHuntObstacles(){
     addWall(zn.cx, zn.cz + 5.5, 5, 0.8, 3.5, 0x94a3b8);
   });
 
-  // 3. 中距離・外周の遮蔽壁＆石垣を多数追加
   [
     {x:-38,z:-18,w:12,h:2.6,d:2.0,c:0x57534e},{x:38,z:-18,w:12,h:2.6,d:2.0,c:0x57534e},
     {x:-38,z: 18,w:12,h:2.6,d:2.0,c:0x57534e},{x:38,z: 18,w:12,h:2.6,d:2.0,c:0x57534e},
@@ -1304,7 +1828,6 @@ function buildPropHuntObstacles(){
     {x:-24,z: 82,w:2.4,h:2.8,d:16,c:0x166534},{x:24,z: 82,w:2.4,h:2.8,d:16,c:0x166534}
   ].forEach(w=>addWall(w.x,w.z,w.w,w.h,w.d,w.c));
 
-  // 4. 変身できる小道具（Props）を180個配置
   const propTypes = Object.keys(PROP_DEFS);
   let seed = 424242;
   const rand = () => {
@@ -1312,7 +1835,7 @@ function buildPropHuntObstacles(){
     return seed / 4294967296;
   };
 
-  for(let i=0; i<180; i++){
+  for(let i=0; i<200; i++){
     const typeId = propTypes[i % propTypes.length];
     let px = (rand() - 0.5) * 195;
     let pz = (rand() - 0.5) * 195;
@@ -1322,7 +1845,6 @@ function buildPropHuntObstacles(){
   }
 }
 
-// FPSステージ：広大な220mアリーナ＆多数の障害物・遮蔽ブロック
 function buildFPSBattleArena(){
   const floor=new THREE.Mesh(
     new THREE.PlaneGeometry(ARENA_HALF*2,ARENA_HALF*2),
@@ -1365,7 +1887,6 @@ function buildFPSBattleArena(){
   addBlock( 12,-70,7,2.6,2.0,0xe11d48,0xbe123c,0.3);
   addBlock( 0,-62,6,1.6,2.0,0xf43f5e);
 
-  // 中央タワー＆多数の遮蔽ウォール
   addBlock(0,0,9,3.4,9,0x475569,0xf59e0b,0.15);
   addBlock(0,0,4.5,6.2,4.5,0x334155);
   addBlock(-16,0,3.2,2.4,12,0x64748b);
@@ -1373,7 +1894,6 @@ function buildFPSBattleArena(){
   addBlock( 0,20,12,2.4,3.2,0x64748b);
   addBlock( 0,-20,12,2.4,3.2,0x64748b);
 
-  // 左右高台デッキ＆段差
   [-52,52].forEach(sx=>{
     addBlock(sx,0,13,3.2,26,0x334155);
     addBlock(sx>0?sx-5.5:sx+5.5,-8,1.4,4.5,6,0x475569);
@@ -1384,7 +1904,6 @@ function buildFPSBattleArena(){
     addBlock(sx,-24,9,1.0,6,0x64748b);
   });
 
-  // 追加の中距離・外周コンテナ＆バンカー障害物（24個）
   [
     {x:-30,z:42,w:8,h:3.0,d:3.5,c:0x0284c7},{x:30,z:42,w:8,h:3.0,d:3.5,c:0x0284c7},
     {x:-30,z:-42,w:8,h:3.0,d:3.5,c:0xe11d48},{x:30,z:-42,w:8,h:3.0,d:3.5,c:0xe11d48},
@@ -1395,19 +1914,19 @@ function buildFPSBattleArena(){
     {x:-80,z:0,w:4.5,h:3.5,d:16.0,c:0x1e293b},{x:80,z:0,w:4.5,h:3.5,d:16.0,c:0x1e293b}
   ].forEach(b=>addBlock(b.x,b.z,b.w,b.h,b.d,b.c));
 
-  // ジャンプパッド
   [{x:-24,z:24},{x:24,z:24},{x:-24,z:-24},{x:24,z:-24},{x:-60,z:28},{x:60,z:-28},{x:-60,z:-28},{x:60,z:28}].forEach(jp=>{
     const pad=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.8,0.22,18),
       new THREE.MeshStandardMaterial({color:0x38bdf8,emissive:0x0284c7,emissiveIntensity:0.8}));
     pad.position.set(jp.x,0.11,jp.z);worldGroup.add(pad);jumpPads.push({x:jp.x,z:jp.z,radius:1.8,mesh:pad});
   });
 
+  // 初期の宝箱と弾薬箱をランダム配置
+  for(let i=0;i<5;i++) spawnSupplyChestAtRandom();
+  for(let i=0;i<5;i++) spawnAmmoCrateAtRandom();
+
   syncBotsWithHumanPriority();
 }
 
-// ==========================================
-// オンラインユーザー最優先（人間が来たらBotを自動削減・退場）
-// ==========================================
 function syncBotsWithHumanPriority(){
   const activeHumans = Object.values(remotePlayers).filter(rp => rp.mode === gameState.mode).length + 1;
 
@@ -1429,7 +1948,8 @@ function syncBotsWithHumanPriority(){
       const spawnX = (idx===0?-12:12);
       const mesh=createCharacterMesh(0x38bdf8,false,cfg.team);
       mesh.position.set(spawnX,0,spawnZ);worldGroup.add(mesh);
-      attachNametag(mesh, cfg.name, cfg.team, 100, 100);
+      // FPSの敵Botは名前非表示
+      attachNametag(mesh, cfg.name, cfg.team, 100, 100, 2.75, false);
       fpsBots.push({
         id:'bot_'+idx, name:cfg.name, team:cfg.team, mesh,
         pos:new THREE.Vector3(spawnX,0,spawnZ), vel:new THREE.Vector3(),
@@ -1480,9 +2000,6 @@ function spawnWorldProp(typeId,x,y,z,rotY,isNpcHider=false){
   return propObj;
 }
 
-// ==========================================
-// 視線遮蔽（壁貫通防止）レイキャスト判定
-// ==========================================
 function hasLineOfSight(fromPos, toPos){
   const dir = new THREE.Vector3().subVectors(toPos, fromPos);
   const dist = dir.length();
@@ -1512,28 +2029,42 @@ function hasLineOfSight(fromPos, toPos){
 }
 
 // ==========================================
-// ゲーム開始（5分サーバー試合・途中参加・30秒隠れタイム対応）
+// ゲーム開始
 // ==========================================
 async function startGame(mode, isLateJoin=false){
   sound.init();
-  gameState.mode=mode;gameState.screen='playing';gameState.paused=false;
+  gameState.mode=mode;gameState.screen='playing';gameState.paused=false;gameState.bagOpen=false;
+  document.getElementById('inventory-overlay').classList.remove('show');
   gameState.score=0;gameState.hp=3;gameState.invulnTimer=0;
   gameState.seekerStunTimer=0;
+  gameState.chestSpawnTimer=7.0;
+  gameState.ammoCrateSpawnTimer=10.0;
   gameState.stats={morphCount:0,tauntCount:0,coinsCollected:0,tagsMade:0,kills:0,deaths:0};
 
   const remFromServer = computeRemainingSeconds(APP.latestMatch);
   const activeMatch = (APP.latestMatch && APP.latestMatch.status === 'playing' && APP.latestMatch.mode === mode && remFromServer > 2)
     ? APP.latestMatch : null;
 
-  gameState.timer = activeMatch ? remFromServer : MATCH_DURATION_SEC;
+  gameState.timer = activeMatch ? remFromServer : getDurationForMode(mode);
 
   if(mode==='fps'){
     gameState.fps.team = assignBalancedTeam();
     gameState.fps.hp = 100;gameState.fps.maxHp = 100;
     gameState.fps.blueScore = activeMatch ? (activeMatch.blueScore || 0) : 0;
     gameState.fps.redScore = activeMatch ? (activeMatch.redScore || 0) : 0;
-    gameState.fps.respawnTimer = 0;gameState.fps.ammo = gameState.fps.magSize;
+    gameState.fps.respawnTimer = 0;
     gameState.fps.reloadTimer = 0;
+    gameState.fps.selectedSlot = 0;
+    // 5マス空いていて1マスに必ず「ライフル、回復(HP25)を1つ」
+    gameState.fps.slots = [
+      { kind:'weapon', itemId:'rifle' },
+      { kind:'heal',   itemId:'heal25' },
+      null,
+      null,
+      null
+    ];
+    gameState.fps.ammoPool = { rifle:70, smg:60, shotgun:30, sniper:20 };
+    gameState.fps.magAmmo  = { rifle:20, smg:30, shotgun:8, sniper:5 };
   }
 
   build3DWorld(mode);
@@ -1548,7 +2079,6 @@ async function startGame(mode, isLateJoin=false){
     player.fpsYaw = gameState.fps.team==='blue'?0:Math.PI;
     player.fpsPitch = 0;
   } else if(mode==='prophunt' && gameState.phRole==='seeker' && inHidePhase){
-    // 最初の30秒間、鬼は別空間へテレポートして待機
     player.pos.set(VOID_ROOM_POS.x, VOID_ROOM_POS.y, VOID_ROOM_POS.z);
     player.fpsYaw = 0; player.fpsPitch = 0;
   } else {
@@ -1566,9 +2096,11 @@ async function startGame(mode, isLateJoin=false){
   document.getElementById('controls-overlay').classList.remove('hidden');
   document.getElementById('fps-crosshair').style.display='none';
   document.getElementById('fps-hud').style.display='none';
+  document.getElementById('fps-hotbar').classList.add('hidden');
   document.getElementById('hud-fps-teams').classList.add('hidden');document.getElementById('hud-fps-teams').classList.remove('flex');
   document.getElementById('hud-fps-hp-box').classList.add('hidden');document.getElementById('hud-fps-hp-box').classList.remove('flex');
   document.getElementById('btn-shoot-mobile').classList.add('hidden');
+  document.getElementById('btn-use-heal').classList.add('hidden');
   document.getElementById('reticle-container').classList.remove('hidden');
   document.getElementById('btn-pause').classList.remove('hidden');
 
@@ -1583,7 +2115,9 @@ async function startGame(mode, isLateJoin=false){
     phActions.classList.add('hidden');disguiseBox.classList.add('hidden');hpContainer.classList.add('hidden');
     document.getElementById('hud-fps-teams').classList.remove('hidden');document.getElementById('hud-fps-teams').classList.add('flex');
     document.getElementById('hud-fps-hp-box').classList.remove('hidden');document.getElementById('hud-fps-hp-box').classList.add('flex');
+    document.getElementById('fps-hotbar').classList.remove('hidden');
     document.getElementById('btn-shoot-mobile').classList.remove('hidden');
+    document.getElementById('btn-use-heal').classList.remove('hidden');
     document.getElementById('reticle-container').style.display='none';
     document.getElementById('fps-crosshair').style.display='block';
     document.getElementById('fps-hud').style.display='flex';
@@ -1593,20 +2127,22 @@ async function startGame(mode, isLateJoin=false){
     badge.className = `px-3 py-1 rounded-full text-xs font-black text-white shadow-lg ${isBlue?'bg-sky-600':'bg-rose-600'}`;
 
     document.getElementById('skill-icon').textContent='🔄';document.getElementById('skill-label').textContent='リロード';
+    renderHotbarUI();
+    rebuildGunMeshForCurrentSlot();
     updateFPSHUD();
     showBanner(
       activeMatch ? '⚡ 進行中の5分マッチに途中参加！' : (isBlue?'🔵 青チームに自動配属！':'🔴 赤チームに自動配属！'),
-      `残り ${Math.ceil(gameState.timer)}秒 のまま合流しました！`
+      `敵名前非表示・宝箱＆弾薬箱出現中！（残り ${Math.ceil(gameState.timer)}秒）`
     );
   } else if(mode==='tag'){
-    modeBadge.textContent='3D 鬼ごっこ';modeBadge.className='px-2.5 py-0.5 rounded-lg text-xs font-black bg-rose-500 text-white';
+    modeBadge.textContent='3D 鬼ごっこ(2分)';modeBadge.className='px-2.5 py-0.5 rounded-lg text-xs font-black bg-rose-500 text-white';
     phActions.classList.add('hidden');disguiseBox.classList.add('hidden');hpContainer.classList.remove('hidden');
     document.getElementById('reticle-container').style.display='flex';
     document.getElementById('skill-icon').textContent='💨';document.getElementById('skill-label').textContent='ダッシュ';
     syncBotsWithHumanPriority();
     showBanner(
-      activeMatch ? '⚡ 鬼ごっこサーバーに途中参加！' : (gameState.tagRole==='seeker'?'👹 あなたは鬼だ！':'🏃 あなたは逃走者だ！'),
-      gameState.tagRole==='seeker' ? '逃走者に触れてダメージを与えよう（触れると3秒スタン）！' : '鬼から逃げ切れ！触れるとダメージ＆鬼を3秒スタン！'
+      activeMatch ? '⚡ 鬼ごっこサーバーに途中参加！' : (gameState.tagRole==='seeker'?'👹 あなたは鬼だ（2分勝負）！':'🏃 あなたは逃走者だ（2分勝負）！'),
+      gameState.tagRole==='seeker' ? '逃走者に触れてダメージを与えよう（触れると3秒スタン）！' : '2分間逃げ切れ！触れるとダメージ＆鬼を3秒スタン！'
     );
   } else {
     modeBadge.textContent='3D 変身かくれんぼ';modeBadge.className='px-2.5 py-0.5 rounded-lg text-xs font-black bg-emerald-500 text-slate-950';
@@ -1619,8 +2155,8 @@ async function startGame(mode, isLateJoin=false){
       updateDisguiseHUD();
       const hideLeft = Math.max(0, Math.ceil(HIDE_PHASE_SEC - elapsed));
       showBanner(
-        inHidePhase ? `🪴 隠れタイム（残り${hideLeft}秒）！` : '🔍 鬼が捜索中！',
-        inHidePhase ? '30秒の間にモノに変身して隠れよう！鬼は別空間で待機中' : '変身して見つからないように逃げ隠れしよう！'
+        inHidePhase ? `🪴 隠れタイム（残り${hideLeft}秒）！` : '🔍 鬼が銃で捜索中！',
+        '隠れる側の名前は非表示！モノに変身して隠れよう！'
       );
     } else {
       phActions.classList.add('hidden');disguiseBox.classList.add('hidden');hpContainer.classList.add('hidden');
@@ -1632,7 +2168,8 @@ async function startGame(mode, isLateJoin=false){
       badge.textContent = '🔫 かくれんぼ鬼（銃攻撃）';
       badge.className = 'px-3 py-1 rounded-full text-xs font-black bg-rose-600 text-white shadow-lg';
       document.getElementById('skill-icon').textContent='🔄';document.getElementById('skill-label').textContent='リロード';
-      gameState.fps.ammo = gameState.fps.magSize;
+      gameState.fps.ammoPool.rifle = 120;
+      gameState.fps.magAmmo.rifle = 20;
       gameState.fps.reloadTimer = 0;
       updateFPSHUD();
       const hideLeft = Math.max(0, Math.ceil(HIDE_PHASE_SEC - elapsed));
@@ -1648,6 +2185,20 @@ async function startGame(mode, isLateJoin=false){
   enterPlayingMode();
 }
 
+function rebuildGunMeshForCurrentSlot(){
+  if(player.weaponMesh){worldGroup.remove(player.weaponMesh);player.weaponMesh=null;}
+  if(gameState.mode === 'fps'){
+    const wDef = getCurrentWeaponDef();
+    if(wDef){
+      player.weaponMesh = createWeaponMesh(gameState.fps.team, wDef.color);
+      worldGroup.add(player.weaponMesh);
+    }
+  } else if(gameState.mode === 'prophunt' && gameState.phRole === 'seeker'){
+    player.weaponMesh = createWeaponMesh('red', 0xfbbf24);
+    worldGroup.add(player.weaponMesh);
+  }
+}
+
 function rebuildPlayerMesh(isSeeker){
   if(player.mesh)worldGroup.remove(player.mesh);
   if(gameState.mode==='prophunt'&&player.disguise){
@@ -1661,20 +2212,16 @@ function rebuildPlayerMesh(isSeeker){
   }
   player.mesh.position.copy(player.pos);player.mesh.rotation.y=player.rotY;worldGroup.add(player.mesh);
 
-  if(player.weaponMesh){worldGroup.remove(player.weaponMesh);player.weaponMesh=null;}
-  if(canUseGun()){
-    const gunTeam = gameState.mode==='fps' ? gameState.fps.team : 'red';
-    player.weaponMesh=createWeaponMesh(gunTeam);
-    worldGroup.add(player.weaponMesh);
+  rebuildGunMeshForCurrentSlot();
+  if(canUseGun() || gameState.mode==='fps'){
     player.mesh.visible=false;
   } else {
     player.mesh.visible=true;
   }
 }
 
-function createWeaponMesh(team='blue'){
+function createWeaponMesh(team='blue', accentHex=0x38bdf8){
   const g=new THREE.Group();
-  const accentHex = team==='red'?0xf43f5e:0x38bdf8;
   const bodyMat=new THREE.MeshStandardMaterial({color:0x1e293b,roughness:0.4,metalness:0.7});
   const accentMat=new THREE.MeshStandardMaterial({color:accentHex,emissive:accentHex,emissiveIntensity:0.6});
   const receiver=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.14,0.55),bodyMat);g.add(receiver);
@@ -1690,20 +2237,20 @@ function createWeaponMesh(team='blue'){
 
 function createAISeeker(x,z,idx){
   const mesh=createCharacterMesh(0xe11d48,true);mesh.position.set(x,0,z);worldGroup.add(mesh);
-  attachNametag(mesh,`鬼 AI #${idx+1}`);
+  attachNametag(mesh,`鬼 AI #${idx+1}`,null,0,0,2.75,true);
   return {id:idx,mesh,pos:new THREE.Vector3(x,0,z),vel:new THREE.Vector3(),rotY:0,radius:0.52,baseSpeed:7.8,targetPos:new THREE.Vector3(x,0,z),patrolTimer:0,stunTimer:0,moveSpeed:0};
 }
 function createAIRunner(x,z,idx){
   const mesh=createCharacterMesh(0x38bdf8,false);mesh.position.set(x,0,z);worldGroup.add(mesh);
-  attachNametag(mesh,`Runner_${idx+1}`);
+  attachNametag(mesh,`Runner_${idx+1}`,null,0,0,2.75,true);
   return {id:idx,mesh,pos:new THREE.Vector3(x,0,z),vel:new THREE.Vector3(),rotY:0,radius:0.46,speed:8.2,wanderTimer:0,targetRotY:0,caught:false,hp:3,moveSpeed:0};
 }
 
 // ==========================================
-// アクション＆銃撃（FPS＆かくれんぼ鬼共通）
+// アクション＆銃撃
 // ==========================================
 function triggerMorph(){
-  if(gameState.screen!=='playing'||gameState.paused||gameState.mode!=='prophunt'||gameState.phRole!=='hider')return;
+  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen||gameState.mode!=='prophunt'||gameState.phRole!=='hider')return;
   if(player.targetedProp){
     player.disguise=player.targetedProp.def;player.lockedRotY=player.targetedProp.rotY;
     gameState.stats.morphCount++;gameState.score+=60;sound.playMorph();
@@ -1717,14 +2264,14 @@ function triggerMorph(){
 }
 
 function triggerLock(){
-  if(gameState.screen!=='playing'||gameState.paused||gameState.mode!=='prophunt'||!player.disguise)return;
+  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen||gameState.mode!=='prophunt'||!player.disguise)return;
   player.locked=!player.locked;
   if(player.locked){player.lockedRotY=Math.round(player.rotY/(Math.PI/2))*(Math.PI/2);player.mesh.rotation.y=player.lockedRotY;}
   sound.playLock(player.locked);updateLockHUD();
 }
 
 function triggerJump(){
-  if(gameState.screen!=='playing'||gameState.paused)return;
+  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen)return;
   if(gameState.mode==='fps'&&gameState.fps.respawnTimer>0)return;
   if(gameState.mode==='tag'&&gameState.tagRole==='seeker'&&gameState.seekerStunTimer>0)return;
   if(player.locked){player.locked=false;updateLockHUD();}
@@ -1732,10 +2279,26 @@ function triggerJump(){
 }
 
 function triggerSkill(){
-  if(gameState.screen!=='playing'||gameState.paused)return;
-  if(canUseGun()){
-    if(gameState.fps.reloadTimer<=0&&gameState.fps.ammo<gameState.fps.magSize){
-      gameState.fps.reloadTimer=1.1;sound.playReload();pushToast('🔄 リロード中...','text-amber-300');
+  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen)return;
+  if(gameState.mode==='fps'){
+    const wDef = getCurrentWeaponDef();
+    if(!wDef){
+      useSelectedHeal();
+      return;
+    }
+    const curMag = gameState.fps.magAmmo[wDef.id] || 0;
+    const pool = gameState.fps.ammoPool[wDef.ammoType] || 0;
+    if(gameState.fps.reloadTimer<=0 && curMag < wDef.magSize && pool > 0){
+      gameState.fps.reloadTimer=1.0;sound.playReload();pushToast(`🔄 ${wDef.name} リロード中...`,'text-amber-300');
+    }
+    return;
+  }
+  if(gameState.mode==='prophunt' && gameState.phRole==='seeker'){
+    const wDef = WEAPON_DEFS.rifle;
+    const curMag = gameState.fps.magAmmo.rifle || 0;
+    const pool = gameState.fps.ammoPool.rifle || 0;
+    if(gameState.fps.reloadTimer<=0 && curMag < wDef.magSize && pool > 0){
+      gameState.fps.reloadTimer=1.0;sound.playReload();pushToast('🔄 リロード中...','text-amber-300');
     }
     return;
   }
@@ -1744,19 +2307,31 @@ function triggerSkill(){
 }
 
 function triggerTaunt(){
-  if(gameState.screen!=='playing'||gameState.paused||gameState.mode!=='prophunt'||player.tauntCooldown>0)return;
+  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen||gameState.mode!=='prophunt'||player.tauntCooldown>0)return;
   player.tauntCooldown=5.0;gameState.stats.tauntCount++;gameState.score+=250;sound.playTaunt();
   pushToast('🎶 口笛アピール！ +250pt','text-amber-300');
 }
 
 function shootGun(){
-  if(!canUseGun()||gameState.screen!=='playing'||gameState.paused)return;
+  if(!canUseGun()||gameState.screen!=='playing'||gameState.paused||gameState.bagOpen)return;
   if(gameState.mode==='fps'&&gameState.fps.respawnTimer>0)return;
   if(gameState.fps.fireCooldown>0||gameState.fps.reloadTimer>0)return;
-  if(gameState.fps.ammo<=0){triggerSkill();return;}
 
-  gameState.fps.ammo--;gameState.fps.fireCooldown=0.15;gameState.fps.recoil=0.045;
-  sound.playShot();updateFPSHUD();
+  const wDef = gameState.mode==='fps' ? getCurrentWeaponDef() : WEAPON_DEFS.rifle;
+  if(!wDef) return;
+
+  const curMag = gameState.fps.magAmmo[wDef.id] || 0;
+  if(curMag <= 0){
+    triggerSkill();
+    return;
+  }
+
+  gameState.fps.magAmmo[wDef.id] = curMag - 1;
+  gameState.fps.fireCooldown = wDef.fireCooldown;
+  gameState.fps.recoil = 0.045;
+  sound.playShot();
+  updateFPSHUD();
+  if(gameState.bagOpen) renderBagUI();
   if(player.weaponMesh?.userData.muzzleFlash)player.weaponMesh.userData.muzzleFlash.material.opacity=1;
 
   const camDir=new THREE.Vector3();camera.getWorldDirection(camDir);
@@ -1766,7 +2341,6 @@ function shootGun(){
   let hitPoint=startPos.clone().addScaledVector(camDir,100);
   let hitEnemy=null, isHeadshot=false, closestDist=160;
 
-  // 壁・障害物との交差を先に判定し、壁越しのヒットを防ぐ
   const worldHits=raycaster.intersectObjects(worldGroup.children,true);
   for(const h of worldHits){
     let isChar=false, p=h.object;
@@ -1794,12 +2368,11 @@ function shootGun(){
     });
   }
 
-  const beamColor = gameState.mode==='fps' ? (gameState.fps.team==='blue'?0x38bdf8:0xf43f5e) : 0xfbbf24;
-  spawnBulletTrail(startPos,hitPoint,beamColor);
-  sendShotBeamToRemote(startPos,hitPoint,beamColor);
+  spawnBulletTrail(startPos,hitPoint,wDef.color);
+  sendShotBeamToRemote(startPos,hitPoint,wDef.color);
 
   if(hitEnemy){
-    const dmg = gameState.mode==='prophunt' ? 1 : (isHeadshot?50:25);
+    const dmg = gameState.mode==='prophunt' ? 1 : (isHeadshot ? wDef.damageHead : wDef.damageBody);
     const ch=document.getElementById('fps-crosshair');ch.classList.add('hit');setTimeout(()=>ch.classList.remove('hit'),120);
     sound.playTargetHit();spawn3DBurst(hitPoint.x,hitPoint.y,hitPoint.z,isHeadshot?0xfacc15:0xf43f5e,14);
     addFloatingSprite(hitPoint.x,hitPoint.y+0.4,hitPoint.z,gameState.mode==='prophunt'?'HIT!':(isHeadshot?`HEAD -${dmg}!`:`-${dmg}`),isHeadshot?'#facc15':'#fb7185');
@@ -1808,7 +2381,7 @@ function shootGun(){
       if(gameState.mode==='prophunt'){
         gameState.score+=200;
         gameState.stats.tagsMade++;
-        pushToast(`🎯 変身中の ${hitEnemy.target.username} に命中！ +200pt`,'text-amber-300');
+        pushToast(`🎯 変身中の相手 (${hitEnemy.target.username}) に命中！ +200pt`,'text-amber-300');
       }
     } else {
       damageFPSBot(hitEnemy.target,dmg,isHeadshot);
@@ -1838,7 +2411,6 @@ function spawnBulletTrail(start,end,color){
 
 function damageFPSBot(bot,dmg,isHeadshot){
   bot.hp=Math.max(0,bot.hp-dmg);
-  updateRobloxNametag(bot.mesh.userData.nametag,bot.name,bot.team,bot.hp,bot.maxHp);
   if(bot.hp<=0){bot.deadTimer=3.0;bot.mesh.visible=false;onPlayerGotKill(bot.name,isHeadshot);}
 }
 
@@ -1848,7 +2420,7 @@ function onPlayerGotKill(victimName,isHeadshot){
     if(gameState.fps.team==='blue')gameState.fps.blueScore++;else gameState.fps.redScore++;
     updateMatchScoresInRTDB();
   }
-  pushToast(`⚔️ ${victimName} を撃破！ (+${isHeadshot?150:100}pt)`,'text-amber-300');
+  pushToast(`⚔️ 敵を撃破！ (+${isHeadshot?150:100}pt)`,'text-amber-300');
 }
 
 function takePlayerDamage(dmg,attackerName='鬼・敵プレイヤー'){
@@ -1857,11 +2429,12 @@ function takePlayerDamage(dmg,attackerName='鬼・敵プレイヤー'){
     if(gameState.fps.respawnTimer>0)return;
     gameState.fps.hp=Math.max(0,gameState.fps.hp-dmg);sound.playHit();
     const vig=document.getElementById('hit-vignette');vig.style.opacity='1';setTimeout(()=>{vig.style.opacity='0';},180);
+    updateFPSHUD();
     if(gameState.fps.hp<=0){
       gameState.stats.deaths++;gameState.fps.respawnTimer=3.0;
       if(gameState.fps.team==='blue')gameState.fps.redScore++;else gameState.fps.blueScore++;
       updateMatchScoresInRTDB();
-      showBanner('💀 やられた！',`${attackerName} に倒された！ 3秒後にリスポーン...`);
+      showBanner('💀 やられた！','3秒後にリスポーン...');
     }
   } else {
     gameState.hp = Math.max(0, gameState.hp - 1);
@@ -1869,7 +2442,7 @@ function takePlayerDamage(dmg,attackerName='鬼・敵プレイヤー'){
     sound.playHit();
     updateHeartsHUD();
     const vig=document.getElementById('hit-vignette');vig.style.opacity='1';setTimeout(()=>{vig.style.opacity='0';},220);
-    pushToast(`💥 ${attackerName} からダメージ！（残り❤️${gameState.hp}）`,'text-rose-400');
+    pushToast(`💥 ダメージを受けた！（残り❤️${gameState.hp}）`,'text-rose-400');
     if(gameState.hp<=0){
       endGame(false);
     }
@@ -1877,14 +2450,46 @@ function takePlayerDamage(dmg,attackerName='鬼・敵プレイヤー'){
 }
 
 function respawnFPSPlayer(){
-  gameState.fps.hp=gameState.fps.maxHp;gameState.fps.ammo=gameState.fps.magSize;gameState.fps.reloadTimer=0;
+  gameState.fps.hp=gameState.fps.maxHp;
+  gameState.fps.reloadTimer=0;
+  gameState.fps.slots = [
+    { kind:'weapon', itemId:'rifle' },
+    { kind:'heal',   itemId:'heal25' },
+    null, null, null
+  ];
+  gameState.fps.selectedSlot = 0;
+  gameState.fps.magAmmo = { rifle:20, smg:30, shotgun:8, sniper:5 };
   player.pos.set((Math.random()-0.5)*22,0,gameState.fps.team==='blue'?78:-78);
   player.vel.set(0,0,0);player.fpsYaw=gameState.fps.team==='blue'?0:Math.PI;
-  updateFPSHUD();pushToast('✨ リスポーン完了！','text-emerald-300');
+  renderHotbarUI();
+  rebuildGunMeshForCurrentSlot();
+  updateFPSHUD();
+  pushToast('✨ リスポーン完了！','text-emerald-300');
 }
 
 function updateFPSHUD(){
-  document.getElementById('fps-ammo').innerHTML=`${gameState.fps.ammo} <small>/ ∞</small>`;
+  const wDef = gameState.mode==='fps' ? getCurrentWeaponDef() : WEAPON_DEFS.rifle;
+  const hDef = gameState.mode==='fps' ? getCurrentHealDef() : null;
+  const labelEl = document.getElementById('fps-weapon-label');
+
+  if(wDef){
+    const mag = gameState.fps.magAmmo[wDef.id] ?? 0;
+    const pool = gameState.fps.ammoPool[wDef.ammoType] ?? 0;
+    document.getElementById('fps-ammo').innerHTML=`${mag} <small>/ ${pool}</small>`;
+    if(labelEl) labelEl.textContent = `${wDef.icon} ${wDef.name}（${AMMO_DEFS[wDef.ammoType].name}）`;
+  } else if(hDef){
+    document.getElementById('fps-ammo').innerHTML=`${hDef.icon} <small>クリック/Hで使用</small>`;
+    if(labelEl) labelEl.textContent = `${hDef.icon} ${hDef.name}`;
+  } else {
+    document.getElementById('fps-ammo').innerHTML=`— <small>/ 空き枠</small>`;
+    if(labelEl) labelEl.textContent = '空きスロット（1〜5で切替）';
+  }
+
+  document.getElementById('hud-fps-hp-text').textContent=gameState.fps.hp;
+  const ratio=Math.max(0,gameState.fps.hp/gameState.fps.maxHp);
+  const bar=document.getElementById('hud-fps-hp-bar');
+  bar.style.width=`${ratio*100}%`;
+  bar.className=`h-full transition-all duration-150 ${ratio>0.5?'bg-emerald-400':(ratio>0.25?'bg-amber-400':'bg-rose-500')}`;
 }
 
 function addFloatingSprite(x,y,z,text,color){
@@ -2052,14 +2657,15 @@ function createOrJoinServerMatch(createNew){
   const FB=window.FB;
   const matchRef = FB.rtRef(FB.rtdb, `servers/${APP.serverId}/match`);
   const now = Date.now();
+  const duration = getDurationForMode(gameState.mode);
 
   if(createNew){
     FB.rtSet(matchRef, {
       status: 'playing',
       mode: gameState.mode,
-      duration: MATCH_DURATION_SEC,
+      duration,
       startedAt: now,
-      timer: MATCH_DURATION_SEC,
+      timer: duration,
       blueScore: 0,
       redScore: 0,
       hostUid: APP.profile?.uid || 'unknown',
@@ -2158,8 +2764,8 @@ function startMatchAndPlayerSync(createNewMatch=true){
       let rp=remotePlayers[uid];
       const isRemoteSeeker = (p.mode==='tag' && p.role==='seeker') || (p.mode==='prophunt' && p.role==='seeker');
       const nextDisguise = (p.mode==='prophunt' && p.disguise && PROP_DEFS[p.disguise]) ? p.disguise : null;
+      const showTag = shouldShowNametagForRemote(p);
 
-      // 変身状態（nextDisguise）や役割・チームが変わったらメッシュを再構築
       if(!rp || rp.team!==p.team || rp.disguise!==nextDisguise || rp.isSeeker!==isRemoteSeeker){
         if(rp?.mesh)worldGroup.remove(rp.mesh);
         let mesh, tagY=2.75;
@@ -2170,7 +2776,7 @@ function startMatchAndPlayerSync(createNewMatch=true){
           mesh = createCharacterMesh(isRemoteSeeker?0xe11d48:0x38bdf8, isRemoteSeeker, p.team||null);
         }
         mesh.position.set(p.x,p.y,p.z);worldGroup.add(mesh);
-        attachNametag(mesh,p.username||'Player',p.team||null,p.hp??100,p.mode==='fps'?100:0,tagY);
+        attachNametag(mesh,p.username||'Player',p.team||null,p.hp??100,p.mode==='fps'?100:0,tagY,showTag);
         rp={
           mesh,uid,targetPos:new THREE.Vector3(p.x,p.y,p.z),
           team:p.team,hp:p.hp??100,username:p.username,mode:p.mode,
@@ -2191,14 +2797,17 @@ function startMatchAndPlayerSync(createNewMatch=true){
       rp.username=p.username||'Player';
       rp.mesh.visible=(p.mode==='fps' ? (rp.hp>0) : true);
       if(rp.mesh.userData.nametag){
-        updateRobloxNametag(rp.mesh.userData.nametag,rp.username,rp.team,rp.hp,p.mode==='fps'?100:0);
+        rp.mesh.userData.nametag.visible = showTag;
+        if(showTag){
+          updateRobloxNametag(rp.mesh.userData.nametag,rp.username,rp.team,rp.hp,p.mode==='fps'?100:0);
+        }
       }
     });
 
     syncBotsWithHumanPriority();
   });
 
-  if(canUseGun() || gameState.mode==='tag' || gameState.mode==='prophunt'){
+  if(canUseGun() || gameState.mode==='tag' || gameState.mode==='prophunt' || gameState.mode==='fps'){
     const myHitsRef=FB.rtRef(FB.rtdb,`servers/${APP.serverId}/hits/${myUid}`);
     FB.rtRemove(myHitsRef).catch(()=>{});
     unsubscribeHits=FB.onChildAdded(myHitsRef,(snap)=>{
@@ -2207,7 +2816,7 @@ function startMatchAndPlayerSync(createNewMatch=true){
     });
   }
 
-  if(canUseGun()){
+  if(canUseGun() || gameState.mode==='fps'){
     const shotsRef=FB.rtRef(FB.rtdb,`servers/${APP.serverId}/shots`);
     const joinedAt = Date.now();
     unsubscribeShots=FB.onChildAdded(shotsRef,(snap)=>{
@@ -2261,7 +2870,6 @@ function updateRemotePlayers(dt){
     if(sp>0.2 && !rp.disguise)rp.mesh.rotation.y=Math.atan2(rp.mesh.position.x-px,rp.mesh.position.z-pz);
     if(rp.mesh.userData.joints)animateCharacter(rp.mesh,dt,sp,true);
 
-    // 鬼ごっこ：自分が「鬼」でオンライン逃走者に触れたらダメージ＆3秒スタン
     if(gameState.mode==='tag' && gameState.tagRole==='seeker' && gameState.seekerStunTimer<=0){
       if(rp.role!=='seeker' && player.pos.distanceTo(rp.mesh.position) < 1.85){
         triggerSeekerTagHitAndStun(rp.username || '逃走者', rp.uid);
@@ -2270,14 +2878,13 @@ function updateRemotePlayers(dt){
   });
 }
 
-// 鬼ごっこ：逃走者に触れた時のダメージ＆3秒スタン処理
 function triggerSeekerTagHitAndStun(targetName, targetUid=null){
   gameState.seekerStunTimer = 3.0;
   gameState.stats.tagsMade++;
   gameState.score += 250;
   sound.playStun();
-  pushToast(`💥 ${targetName} に接触ダメージ！ 鬼は3秒間スタン！`,'text-amber-300');
-  showBanner('⚡ 3秒間スタン中！','逃走者に触れた反動で動けません...');
+  pushToast(`💥 逃走者に接触ダメージ！ 鬼は3秒間スタン！`,'text-amber-300');
+  showBanner('⚡ 3秒間スタン中！','逃走者に触れた反動で3秒間動けません...');
   if(targetUid) sendHitEventToRemote(targetUid, 1, false);
 }
 
@@ -2285,7 +2892,7 @@ function triggerSeekerTagHitAndStun(targetName, targetUid=null){
 // 更新ループ
 // ==========================================
 function update(dt){
-  if(gameState.screen!=='playing'||gameState.paused)return;
+  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen)return;
   gameState.timer-=dt;
   if(player.skillCooldown>0)player.skillCooldown=Math.max(0,player.skillCooldown-dt);
   if(player.dashTimer>0)player.dashTimer=Math.max(0,player.dashTimer-dt);
@@ -2293,9 +2900,11 @@ function update(dt){
   if(gameState.invulnTimer>0)gameState.invulnTimer=Math.max(0,gameState.invulnTimer-dt);
   if(gameState.seekerStunTimer>0)gameState.seekerStunTimer=Math.max(0,gameState.seekerStunTimer-dt);
 
+  const totalDur = getDurationForMode(gameState.mode);
+
   // かくれんぼ：30秒経過したら鬼を別空間から試合場へテレポート
   if(gameState.mode === 'prophunt'){
-    const elapsed = computeElapsedSeconds(APP.latestMatch) || (MATCH_DURATION_SEC - gameState.timer);
+    const elapsed = computeElapsedSeconds(APP.latestMatch) || (totalDur - gameState.timer);
     if(!gameState.prophuntSeekerDeployed && elapsed >= HIDE_PHASE_SEC){
       gameState.prophuntSeekerDeployed = true;
       if(gameState.phRole === 'seeker'){
@@ -2313,11 +2922,34 @@ function update(dt){
     }
   }
 
+  // FPSランダム宝箱・ランダム弾薬箱スポーン
   if(gameState.mode==='fps'){
+    gameState.chestSpawnTimer -= dt;
+    if(gameState.chestSpawnTimer <= 0){
+      gameState.chestSpawnTimer = 8.0 + Math.random() * 6.0;
+      spawnSupplyChestAtRandom();
+    }
+    gameState.ammoCrateSpawnTimer -= dt;
+    if(gameState.ammoCrateSpawnTimer <= 0){
+      gameState.ammoCrateSpawnTimer = 10.0 + Math.random() * 7.0;
+      spawnAmmoCrateAtRandom();
+    }
+    updatePickupsAndProximity(dt);
+
     gameState.fps.fireCooldown=Math.max(0,gameState.fps.fireCooldown-dt);
     if(gameState.fps.reloadTimer>0){
       gameState.fps.reloadTimer-=dt;
-      if(gameState.fps.reloadTimer<=0){gameState.fps.ammo=gameState.fps.magSize;updateFPSHUD();}
+      if(gameState.fps.reloadTimer<=0){
+        const wDef = getCurrentWeaponDef();
+        if(wDef){
+          const need = wDef.magSize - (gameState.fps.magAmmo[wDef.id] || 0);
+          const avail = gameState.fps.ammoPool[wDef.ammoType] || 0;
+          const loadAmt = Math.min(need, avail);
+          gameState.fps.magAmmo[wDef.id] = (gameState.fps.magAmmo[wDef.id] || 0) + loadAmt;
+          gameState.fps.ammoPool[wDef.ammoType] = avail - loadAmt;
+        }
+        updateFPSHUD();
+      }
     }
     if(gameState.fps.respawnTimer>0){
       gameState.fps.respawnTimer-=dt;
@@ -2334,7 +2966,10 @@ function update(dt){
       gameState.fps.fireCooldown=Math.max(0,gameState.fps.fireCooldown-dt);
       if(gameState.fps.reloadTimer>0){
         gameState.fps.reloadTimer-=dt;
-        if(gameState.fps.reloadTimer<=0){gameState.fps.ammo=gameState.fps.magSize;updateFPSHUD();}
+        if(gameState.fps.reloadTimer<=0){
+          gameState.fps.magAmmo.rifle = WEAPON_DEFS.rifle.magSize;
+          updateFPSHUD();
+        }
       }
     }
     if(gameState.timer<=0){
@@ -2356,7 +2991,7 @@ function update(dt){
 
   let currentMoveSpeed=0;
   if(canMove){
-    const yawForMove=canUseGun()?player.fpsYaw:camCtrl.yaw;
+    const yawForMove=(canUseGun() || gameState.mode==='fps')?player.fpsYaw:camCtrl.yaw;
     const camForward=new THREE.Vector3(-Math.sin(yawForMove),0,-Math.cos(yawForMove));
     const camRight=new THREE.Vector3(Math.cos(yawForMove),0,-Math.sin(yawForMove));
     const moveDir=new THREE.Vector3().addScaledVector(camForward,fi).addScaledVector(camRight,ri);
@@ -2364,7 +2999,7 @@ function update(dt){
     player.vel.x+=(moveDir.x*player.speed*spMult-player.vel.x)*Math.min(1,dt*14);
     player.vel.z+=(moveDir.z*player.speed*spMult-player.vel.z)*Math.min(1,dt*14);
     currentMoveSpeed=Math.hypot(player.vel.x,player.vel.z);
-    if(currentMoveSpeed>0.4&&!canUseGun())player.rotY=lerpAngle(player.rotY,Math.atan2(player.vel.x,player.vel.z),dt*14);
+    if(currentMoveSpeed>0.4&&!canUseGun()&&gameState.mode!=='fps')player.rotY=lerpAngle(player.rotY,Math.atan2(player.vel.x,player.vel.z),dt*14);
   } else {
     player.vel.x=0;player.vel.z=0;
   }
@@ -2383,14 +3018,14 @@ function update(dt){
   }
 
   if(player.mesh?.userData.joints)animateCharacter(player.mesh,dt,currentMoveSpeed,player.onGround);
-  if(player.mesh&&!canUseGun()){
+  if(player.mesh&&!canUseGun()&&gameState.mode!=='fps'){
     player.mesh.position.copy(player.pos);player.mesh.rotation.y=player.locked?player.lockedRotY:player.rotY;
   }
 
-  if(gameState.mode==='prophunt'&&gameState.phRole==='hider')updateCrosshairTarget();
+  if(gameState.mode==='prophunt'&&gameState.phRole==='hider'&&!player.targetedPickup)updateCrosshairTarget();
   updateAISeekers(dt);updateAIRunners(dt);updateRemotePlayers(dt);
 
-  if(canUseGun())updateFPSCamera();
+  if(canUseGun() || gameState.mode==='fps')updateFPSCamera();
   else updateTPSCamera(dt);
 
   update3DFX(dt);updateHUD();
@@ -2406,16 +3041,13 @@ function update(dt){
   }
 }
 
-// ==========================================
-// Botの移動（壁貫通完全防止）＆射撃（壁貫通防止レイキャスト）
-// ==========================================
 function updateFPSBots(dt){
   fpsBots.forEach(bot=>{
     if(bot.deadTimer>0){
       bot.deadTimer-=dt;
       if(bot.deadTimer<=0){
         bot.hp=bot.maxHp;bot.pos.set((Math.random()-0.5)*28,0,bot.team==='blue'?76:-76);
-        bot.mesh.visible=true;updateRobloxNametag(bot.mesh.userData.nametag,bot.name,bot.team,bot.hp,bot.maxHp);
+        bot.mesh.visible=true;
       }
       return;
     }
@@ -2483,6 +3115,7 @@ function updateFPSCamera(){
 }
 
 function updateCrosshairTarget(){
+  if(player.targetedPickup) return;
   const promptEl=document.getElementById('target-prompt'),promptText=document.getElementById('target-prompt-text');
   raycaster.setFromCamera(new THREE.Vector2(0,0),camera);raycaster.far=14;
   let found=null;
@@ -2575,11 +3208,6 @@ function updateHUD(){
   if(gameState.mode==='fps'){
     document.getElementById('hud-blue-score').textContent=gameState.fps.blueScore;
     document.getElementById('hud-red-score').textContent=gameState.fps.redScore;
-    document.getElementById('hud-fps-hp-text').textContent=gameState.fps.hp;
-    const ratio=Math.max(0,gameState.fps.hp/gameState.fps.maxHp);
-    const bar=document.getElementById('hud-fps-hp-bar');
-    bar.style.width=`${ratio*100}%`;
-    bar.className=`h-full transition-all duration-150 ${ratio>0.5?'bg-emerald-400':(ratio>0.25?'bg-amber-400':'bg-rose-500')}`;
     document.getElementById('hud-phase-text').textContent=gameState.fps.team==='blue'?'🔵 BLUE TEAM':'🔴 RED TEAM';
     document.getElementById('hud-role-sub').textContent=`サーバー: ${APP.serverId} | K:${gameState.stats.kills} D:${gameState.stats.deaths}`;
   } else if(gameState.mode==='tag'){
@@ -2588,14 +3216,14 @@ function updateHUD(){
     } else {
       document.getElementById('hud-phase-text').textContent=gameState.tagRole==='seeker'?'👹 鬼（接触でダメージ＆3秒スタン）':'🏃 逃走者';
     }
-    document.getElementById('hud-role-sub').textContent=`サーバー: ${APP.serverId}`;
+    document.getElementById('hud-role-sub').textContent=`サーバー: ${APP.serverId}（2分マッチ）`;
   } else if(gameState.mode==='prophunt'){
-    const elapsed = computeElapsedSeconds(APP.latestMatch) || (MATCH_DURATION_SEC - gameState.timer);
+    const elapsed = computeElapsedSeconds(APP.latestMatch) || (PH_MATCH_DURATION_SEC - gameState.timer);
     const hideLeft = Math.max(0, HIDE_PHASE_SEC - elapsed);
     if(hideLeft > 0){
       document.getElementById('hud-phase-text').textContent=`⏳ 隠れタイム 残り ${hideLeft.toFixed(1)}s`;
     } else {
-      document.getElementById('hud-phase-text').textContent=gameState.phRole==='seeker'?'🔫 鬼（銃で捜索中）':'🪴 隠れる側（捜索中）';
+      document.getElementById('hud-phase-text').textContent=gameState.phRole==='seeker'?'🔫 鬼（銃で捜索中）':'🪴 隠れる側（名前非表示）';
     }
     document.getElementById('hud-role-sub').textContent=`サーバー: ${APP.serverId}`;
   }
@@ -2635,9 +3263,24 @@ function updateTPSCamera(dt){
 
 window.addEventListener('keydown',e=>{
   keys[e.code]=true;
-  if(gameState.screen!=='playing'||gameState.paused)return;
+  if(gameState.screen!=='playing')return;
+  if(e.code==='KeyB' || e.code==='Tab'){
+    e.preventDefault();
+    if(gameState.mode==='fps'){
+      if(gameState.bagOpen) closeBagModal(); else openBagModal();
+    }
+    return;
+  }
+  if(gameState.paused || gameState.bagOpen)return;
+  if(e.code==='Digit1') selectHotbarSlot(0);
+  if(e.code==='Digit2') selectHotbarSlot(1);
+  if(e.code==='Digit3') selectHotbarSlot(2);
+  if(e.code==='Digit4') selectHotbarSlot(3);
+  if(e.code==='Digit5') selectHotbarSlot(4);
+  if(e.code==='KeyG') { e.preventDefault(); dropHotbarSlotItem(gameState.fps.selectedSlot); }
+  if(e.code==='KeyH') { e.preventDefault(); useSelectedHeal(); }
   if(e.code==='Space'){e.preventDefault();triggerJump();}
-  if(e.code==='KeyE'){e.preventDefault();triggerMorph();}
+  if(e.code==='KeyE'){e.preventDefault();triggerInteractE();}
   if(e.code==='KeyF'){e.preventDefault();triggerLock();}
   if(e.code==='KeyR'||e.code==='ShiftLeft'||e.code==='ShiftRight'){e.preventDefault();triggerSkill();}
   if(e.code==='KeyQ'){e.preventDefault();triggerTaunt();}
@@ -2645,14 +3288,14 @@ window.addEventListener('keydown',e=>{
 window.addEventListener('keyup',e=>{keys[e.code]=false;});
 
 renderer.domElement.addEventListener('touchstart',e=>{
-  if(gameState.screen!=='playing'||gameState.paused)return;
+  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen)return;
   for(const t of e.changedTouches)if(t.clientX>window.innerWidth*0.35){camCtrl.touchId=t.identifier;camCtrl.lastX=t.clientX;camCtrl.lastY=t.clientY;}
 },{passive:true});
 renderer.domElement.addEventListener('touchmove',e=>{
-  if(gameState.screen!=='playing'||gameState.paused)return;
+  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen)return;
   for(const t of e.changedTouches)if(t.identifier===camCtrl.touchId){
     const dx=t.clientX-camCtrl.lastX,dy=t.clientY-camCtrl.lastY;camCtrl.lastX=t.clientX;camCtrl.lastY=t.clientY;
-    if(canUseGun()){player.fpsYaw-=dx*0.004;player.fpsPitch=Math.max(-1.3,Math.min(1.3,player.fpsPitch-dy*0.004));}
+    if(canUseGun() || gameState.mode==='fps'){player.fpsYaw-=dx*0.004;player.fpsPitch=Math.max(-1.3,Math.min(1.3,player.fpsPitch-dy*0.004));}
     else{camCtrl.yaw-=dx*0.008;camCtrl.pitch=Math.max(-0.2,Math.min(1.3,camCtrl.pitch+dy*0.008));}
   }
 },{passive:true});
@@ -2673,6 +3316,10 @@ function updateJoystick(cx,cy){
 document.getElementById('btn-jump').addEventListener('click',triggerJump);
 document.getElementById('btn-skill').addEventListener('click',triggerSkill);
 document.getElementById('btn-shoot-mobile').addEventListener('click',shootGun);
+document.getElementById('btn-use-heal').addEventListener('click',useSelectedHeal);
+document.getElementById('btn-drop-slot').addEventListener('click',()=>dropHotbarSlotItem(gameState.fps.selectedSlot));
+document.getElementById('btn-open-bag').addEventListener('click',openBagModal);
+document.getElementById('btn-close-bag').addEventListener('click',closeBagModal);
 document.getElementById('btn-morph').addEventListener('click',triggerMorph);
 document.getElementById('btn-lock').addEventListener('click',triggerLock);
 document.getElementById('btn-taunt').addEventListener('click',triggerTaunt);
@@ -2712,8 +3359,9 @@ document.getElementById('btn-replay').addEventListener('click',()=>{document.get
 
 function endGame(win,quit=false){
   if(gameState.screen!=='playing')return;
-  gameState.screen='result';gameState.paused=false;sound.stopBGM();stopActiveMatchSync();leavePlayingMode();
-  pauseOverlay.classList.remove('show');document.getElementById('btn-pause').classList.add('hidden');
+  gameState.screen='result';gameState.paused=false;gameState.bagOpen=false;sound.stopBGM();stopActiveMatchSync();leavePlayingMode();
+  pauseOverlay.classList.remove('show');document.getElementById('inventory-overlay').classList.remove('show');
+  document.getElementById('btn-pause').classList.add('hidden');
   if(win)sound.playWin();else if(!quit)sound.playLose();
 
   const rs=document.getElementById('result-screen');
@@ -2721,6 +3369,7 @@ function endGame(win,quit=false){
     rs.classList.add('hidden');
     document.getElementById('title-screen').classList.remove('hidden');document.getElementById('title-screen').classList.add('flex');
     document.getElementById('hud-top').classList.add('hidden');document.getElementById('controls-overlay').classList.add('hidden');
+    document.getElementById('fps-hotbar').classList.add('hidden');
     document.getElementById('reticle-container').classList.add('hidden');document.getElementById('fps-crosshair').style.display='none';document.getElementById('fps-hud').style.display='none';
     gameState.screen='title';return;
   }
@@ -2736,6 +3385,7 @@ function endGame(win,quit=false){
   ` : `<div class="flex justify-between"><span class="text-slate-400">スコア</span><span class="font-black">${Math.round(gameState.score)}</span></div>`;
 
   document.getElementById('hud-top').classList.add('hidden');document.getElementById('controls-overlay').classList.add('hidden');
+  document.getElementById('fps-hotbar').classList.add('hidden');
   document.getElementById('reticle-container').classList.add('hidden');document.getElementById('fps-crosshair').style.display='none';document.getElementById('fps-hud').style.display='none';
   rs.classList.remove('hidden');
 }
