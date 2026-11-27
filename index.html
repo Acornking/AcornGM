@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>3D AcronGM</title>
+<title>3D 鬼ごっこ＆変身かくれんぼ＋チームFPS（完全オンライン版）</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap" rel="stylesheet">
@@ -15,12 +15,21 @@
   #joystick-zone{position:relative;width:116px;height:116px;border-radius:9999px;background:rgba(15,23,42,.45);border:2px solid rgba(255,255,255,.25);backdrop-filter:blur(6px);}
   #joystick-knob{position:absolute;width:46px;height:46px;border-radius:9999px;background:radial-gradient(circle at 30% 30%,#fff,#cbd5e1);box-shadow:0 4px 12px rgba(0,0,0,.55);top:33px;left:33px;pointer-events:none;}
   #canvas-container canvas{display:block;width:100%;height:100%;}
-  #fps-crosshair{position:absolute;left:50%;top:50%;width:28px;height:28px;transform:translate(-50%,-50%);pointer-events:none;z-index:12;}
-  #fps-crosshair::before,#fps-crosshair::after{content:'';position:absolute;background:rgba(255,255,255,.92);box-shadow:0 0 4px rgba(0,0,0,.9);}
+  #fps-crosshair{position:absolute;left:50%;top:50%;width:28px;height:28px;transform:translate(-50%,-50%);pointer-events:none;z-index:12;transition:all .12s ease-out;}
+  #fps-crosshair::before,#fps-crosshair::after{content:'';position:absolute;background:rgba(255,255,255,.92);box-shadow:0 0 4px rgba(0,0,0,.9);transition:all .12s;}
   #fps-crosshair::before{left:50%;top:0;width:2px;height:100%;transform:translateX(-50%);}
   #fps-crosshair::after{top:50%;left:0;height:2px;width:100%;transform:translateY(-50%);}
+  #fps-crosshair.ads{width:14px;height:14px;}
+  #fps-crosshair.ads::before,#fps-crosshair.ads::after{background:#38bdf8;}
+  #fps-crosshair.shotgun{width:54px;height:54px;border:2px solid rgba(251,191,36,0.7);border-radius:9999px;}
+  #fps-crosshair.shotgun::before,#fps-crosshair.shotgun::after{opacity:0.35;}
+  #fps-crosshair.shotgun.ads{width:34px;height:34px;border-color:#38bdf8;}
   #fps-crosshair .hit-marker{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%) rotate(45deg);border:2px solid #f43f5e;border-radius:2px;opacity:0;transition:opacity .1s;}
   #fps-crosshair.hit .hit-marker{opacity:1;}
+  #sniper-scope-overlay{position:absolute;inset:0;z-index:11;pointer-events:none;display:none;background:radial-gradient(circle,transparent 27%,rgba(2,6,23,.96) 31%);}
+  #sniper-scope-overlay::before,#sniper-scope-overlay::after{content:'';position:absolute;background:rgba(56,189,248,.65);}
+  #sniper-scope-overlay::before{left:50%;top:18%;width:1px;height:64%;}
+  #sniper-scope-overlay::after{top:50%;left:22%;height:1px;width:56%;}
   #fps-hud{position:absolute;bottom:92px;left:50%;transform:translateX(-50%);z-index:15;pointer-events:none;display:none;flex-direction:column;align-items:center;gap:4px;}
   #fps-hud .ammo{font-size:24px;font-weight:900;color:#fbbf24;text-shadow:0 2px 8px rgba(0,0,0,.9);}
   #fps-hud .ammo small{font-size:13px;color:#94a3b8;}
@@ -48,13 +57,14 @@
   .hotbar-slot.selected{border-color:#fbbf24;box-shadow:0 0 14px rgba(251,191,36,.75);transform:translateY(-4px);background:rgba(30,41,59,.96);}
 </style>
 </head>
-<body class="w-screen h-screen relative overflow-hidden bg-slate-950">
+<body class="w-screen h-screen relative overflow-hidden bg-slate-950" oncontextmenu="return false;">
 
 <div id="canvas-container" class="absolute inset-0 z-0"></div>
 
 <div id="danger-vignette" class="pointer-events-none absolute inset-0 z-10 transition-opacity duration-200 opacity-0"
      style="background: radial-gradient(circle, transparent 52%, rgba(225,29,72,.6) 100%);"></div>
 <div id="hit-vignette"></div>
+<div id="sniper-scope-overlay"></div>
 
 <!-- 銃クロスヘア & 弾薬HUD -->
 <div id="fps-crosshair" style="display:none;"><div class="hit-marker"></div></div>
@@ -64,7 +74,15 @@
   <div id="fps-weapon-label" class="text-[11px] font-black text-sky-300 bg-slate-900/80 px-2.5 py-0.5 rounded-full border border-slate-700">アサルトライフル</div>
 </div>
 
-<!-- フォートナイト風5スロットホットバー（FPS＆かくれんぼ鬼用） -->
+<!-- 宝箱1秒長押し開錠プログレスバー -->
+<div id="chest-hold-ui" class="hidden pointer-events-none fixed top-1/2 left-1/2 -translate-x-1/2 translate-y-10 z-30 flex flex-col items-center gap-1.5 bg-slate-950/90 border border-amber-400/80 px-4 py-2.5 rounded-2xl shadow-2xl">
+  <div id="chest-hold-label" class="text-xs font-black text-amber-300">📦 宝箱を開錠中... (1.0秒長押し)</div>
+  <div class="w-44 h-2.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+    <div id="chest-hold-bar" class="h-full bg-gradient-to-r from-amber-400 to-yellow-300 transition-none" style="width:0%"></div>
+  </div>
+</div>
+
+<!-- フォートナイト風5スロットホットバー -->
 <div id="fps-hotbar" class="hidden fixed bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-slate-950/85 border border-slate-700/90 px-3 py-2 rounded-2xl shadow-2xl pointer-events-auto">
   <div id="hotbar-slots" class="flex items-center gap-1.5 sm:gap-2"></div>
   <div class="h-10 w-[1px] bg-slate-700 mx-0.5"></div>
@@ -78,13 +96,13 @@
   </button>
 </div>
 
-<!-- かくれんぼ照準＆インタラクトプロンプト -->
+<!-- インタラクトプロンプト -->
 <div id="reticle-container" class="hidden pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
   <div id="reticle-dot" class="w-3.5 h-3.5 rounded-full border-2 border-white/80 bg-white/20 shadow-[0_0_8px_rgba(0,0,0,.8)] transition-all duration-100"></div>
-  <div id="target-prompt" class="mt-4 px-3.5 py-1.5 rounded-xl bg-slate-950/85 border border-emerald-400/80 text-emerald-300 text-xs font-black shadow-lg opacity-0 transition-opacity duration-150 flex items-center gap-1.5">
-    <span class="px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 text-[10px]">E</span>
-    <span id="target-prompt-text">木箱に変身する</span>
-  </div>
+</div>
+<div id="target-prompt" class="pointer-events-none fixed top-1/2 left-1/2 -translate-x-1/2 translate-y-6 z-25 px-3.5 py-1.5 rounded-xl bg-slate-950/90 border border-emerald-400/80 text-emerald-300 text-xs font-black shadow-lg opacity-0 transition-opacity duration-150 flex items-center gap-1.5">
+  <span class="px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 text-[10px]">E</span>
+  <span id="target-prompt-text">アクション</span>
 </div>
 
 <!-- 上部HUD -->
@@ -188,11 +206,17 @@
       </button>
     </div>
     <div class="flex items-center gap-2.5">
+      <button id="btn-ads-mobile" type="button" class="hidden game-btn flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-sky-700/90 hover:bg-sky-600 border-2 border-sky-300 text-white shadow-xl">
+        <span class="text-xl">🔭</span><span class="text-[11px] font-black">覗く</span>
+      </button>
+      <button id="btn-interact-mobile" type="button" class="hidden game-btn flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-amber-600/90 hover:bg-amber-500 border-2 border-amber-300 text-white shadow-xl">
+        <span class="text-xl">✋</span><span class="text-[11px] font-black">拾う/開く</span>
+      </button>
       <button id="btn-use-heal" type="button" class="hidden game-btn flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-emerald-600/90 hover:bg-emerald-500 border-2 border-emerald-300 text-white shadow-xl">
         <span class="text-xl">💊</span><span class="text-[11px] font-black">回復使用</span>
       </button>
       <button id="btn-shoot-mobile" type="button" class="hidden game-btn flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-rose-600/90 hover:bg-rose-500 border-2 border-rose-300 text-white shadow-xl">
-        <span class="text-xl">🔫</span><span class="text-[11px] font-black">射撃</span>
+        <span class="text-xl">🔫</span><span class="text-[11px] font-black">連射</span>
       </button>
       <button id="btn-jump" type="button" class="game-btn flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-teal-600/90 hover:bg-teal-500 border-2 border-teal-300 text-white shadow-xl">
         <span class="text-xl sm:text-2xl">⬆️</span><span class="text-[11px] font-black">ジャンプ</span>
@@ -229,7 +253,7 @@
   </div>
 </div>
 
-<!-- ESCメニューオーバーレイ（背景ぼかしなし） -->
+<!-- ESCメニューオーバーレイ -->
 <div id="pause-overlay">
   <div class="bg-slate-900/90 border-2 border-amber-500/70 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl">
     <div class="text-3xl mb-2">⚙️</div>
@@ -241,12 +265,12 @@
   </div>
 </div>
 
-<!-- クリックで操作開始ヒント（背景ぼかしなし） -->
+<!-- クリックで操作開始ヒント -->
 <div id="click-hint">
   <div class="box px-8 py-5 rounded-2xl bg-slate-900/85 border-2 border-emerald-400/80 text-center shadow-2xl">
     <div class="text-3xl mb-2">🖱️</div>
     <div class="text-sm font-black text-emerald-300">画面をクリックしてマウス操作開始</div>
-    <div class="text-[10px] text-slate-300 mt-1">ESC キーでカーソル表示（背景はぼかしません）</div>
+    <div class="text-[10px] text-slate-300 mt-1">ESC キーでカーソル表示 / 右クリックでADS覗き込み</div>
   </div>
 </div>
 
@@ -321,7 +345,7 @@
 
     <div class="text-center mb-4">
       <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-xs font-bold text-amber-400 mb-2 animate-float">
-        <span>🌐 宝箱＆弾薬箱・5枠ホットバー・袋ドロップ</span><span>•</span><span>鬼ごっこ2分＆名前非表示ルール</span>
+        <span>🌐 E長押し1秒開錠・右クリックADS覗き込み・連射・散弾SG・デスドロップ共有</span>
       </div>
       <h1 class="text-2xl sm:text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-amber-300 to-emerald-400 drop-shadow">3D 鬼ごっこ＆変身かくれんぼ＋FPS</h1>
     </div>
@@ -337,16 +361,16 @@
       <div class="bg-slate-800/75 border-2 border-sky-500/40 rounded-2xl p-5">
         <div class="flex items-center justify-between mb-2">
           <span class="text-3xl">⚔️</span>
-          <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30">宝箱・弾薬箱・5枠ホットバー</span>
+          <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30">E長押し1秒宝箱・右クリック覗き込み・SG散弾・デスドロップ</span>
         </div>
         <h2 class="text-xl font-black text-white mb-1">FPS チームバトルモード</h2>
         <p class="text-xs text-slate-300 leading-relaxed mb-3">
-          <strong>敵の名前は非表示</strong>！ランダム出現する<strong>宝箱</strong>（銃1・回復2・弾70発1種）や<strong>弾薬箱</strong>（全弾60発）を回収しよう。初期手持ちは5枠（1枠目にライフル、2枠目に25HP回復）。<strong>[G]で手持ちを落とす</strong>、<strong>[B]で袋から弾も落とせる</strong>！
+          宝箱は<strong>Eキー1秒長押し</strong>で開錠し、インベントリ満杯時は地面にドロップ！銃を持ちながら落ちているアイテムを<strong>Eで拾うと手持ちと交換</strong>！<strong>左クリック長押しで連続射撃</strong>、<strong>右クリックでADS覗き込み</strong>、ショットガンは<strong>8発の散弾</strong>を発射。倒した敵・味方のアイテムも地面に落ちて拾えます！
         </p>
         <div class="grid grid-cols-3 gap-2 mb-4 text-[10px] text-center">
-          <div class="bg-sky-900/40 border border-sky-500/40 rounded-lg py-1.5"><span class="block text-sky-300 font-black text-sm">📦 ランダム宝箱</span>銃1+回復2+弾70発</div>
-          <div class="bg-amber-900/40 border border-amber-500/40 rounded-lg py-1.5"><span class="block text-amber-300 font-black text-sm">🔋 弾薬箱</span>全種類の弾60発ずつ</div>
-          <div class="bg-rose-900/40 border border-rose-500/40 rounded-lg py-1.5"><span class="block text-rose-300 font-black text-sm">🎒 5枠＆袋</span>1枠1個・弾もドロップ</div>
+          <div class="bg-sky-900/40 border border-sky-500/40 rounded-lg py-1.5"><span class="block text-sky-300 font-black text-sm">📦 E長押し1秒</span>枠満杯時は地面に落下</div>
+          <div class="bg-amber-900/40 border border-amber-500/40 rounded-lg py-1.5"><span class="block text-amber-300 font-black text-sm">🔭 右クリック覗き</span>左長押し連射＆SG8散弾</div>
+          <div class="bg-rose-900/40 border border-rose-500/40 rounded-lg py-1.5"><span class="block text-rose-300 font-black text-sm">🔄 E交換＆戦利品</span>敵味方のドロップも回収</div>
         </div>
         <button id="start-fps-btn" type="button" class="game-btn glow-sky w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-600 via-indigo-500 to-rose-500 hover:opacity-95 text-white font-black text-base">⚔️ オンラインFPSサーバーへ参加！</button>
       </div>
@@ -388,10 +412,10 @@
 
     <div class="bg-slate-950/75 border border-slate-800 rounded-2xl p-3.5 mt-4 text-xs text-slate-300">
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-amber-400 font-black block">枠切替/回復</span>1〜5 / H / クリック</div>
+        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-amber-400 font-black block">連射 / 覗き込み</span>左長押し / 右クリック</div>
+        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-emerald-400 font-black block">宝箱1秒 / E交換拾い</span>E長押し / E短押し</div>
         <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-rose-400 font-black block">手持ちを落とす</span>G キー / 落とすボタン</div>
         <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-sky-400 font-black block">袋（弾ドロップ）</span>B キー / Tab / 袋ボタン</div>
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800"><span class="text-emerald-400 font-black block">箱回収/変身</span>E キー / 近づく</div>
       </div>
     </div>
   </div>
@@ -466,14 +490,15 @@
 // ==========================================
 // セッション管理＆サーバー定数
 // ==========================================
-const STORAGE_KEY = 'dggm_online_session_v7';
-const FPS_MATCH_DURATION_SEC = 300; // FPS 5分間
-const TAG_MATCH_DURATION_SEC = 120; // 鬼ごっこ 2分間（120秒）
-const PH_MATCH_DURATION_SEC  = 240; // かくれんぼ 4分間
-const HIDE_PHASE_SEC = 30;          // かくれんぼ隠れタイム30秒
+const STORAGE_KEY = 'dggm_online_session_v8';
+const FPS_MATCH_DURATION_SEC = 300;
+const TAG_MATCH_DURATION_SEC = 120;
+const PH_MATCH_DURATION_SEC  = 240;
+const HIDE_PHASE_SEC = 30;
 const SERVER_MAX_CAPACITY = 16;
 const ARENA_HALF = 110;
 const VOID_ROOM_POS = { x: 0, y: 140, z: 320 };
+const CHEST_OPEN_DURATION = 1.0; // 宝箱はE長押し1.0秒で開く
 
 function getDurationForMode(mode){
   if(mode === 'tag') return TAG_MATCH_DURATION_SEC;
@@ -484,19 +509,23 @@ function getDurationForMode(mode){
 const WEAPON_DEFS = {
   rifle: {
     id:'rifle', name:'アサルトライフル', icon:'🔫', ammoType:'rifle',
-    magSize:20, fireCooldown:0.14, damageBody:25, damageHead:50, color:0x38bdf8
+    magSize:20, fireCooldown:0.13, damageBody:25, damageHead:50, color:0x38bdf8,
+    adsFov:48, spreadHip:0.018, spreadAds:0.004, pellets:1, maxRange:160
   },
   smg: {
     id:'smg', name:'サブマシンガン', icon:'⚡', ammoType:'smg',
-    magSize:30, fireCooldown:0.085, damageBody:15, damageHead:30, color:0xfbbf24
+    magSize:30, fireCooldown:0.075, damageBody:15, damageHead:30, color:0xfbbf24,
+    adsFov:52, spreadHip:0.032, spreadAds:0.012, pellets:1, maxRange:110
   },
   shotgun: {
     id:'shotgun', name:'ショットガン', icon:'💥', ammoType:'shotgun',
-    magSize:8, fireCooldown:0.55, damageBody:65, damageHead:95, color:0xf97316
+    magSize:8, fireCooldown:0.58, damageBody:14, damageHead:22, color:0xf97316,
+    adsFov:54, spreadHip:0.095, spreadAds:0.055, pellets:8, maxRange:42 // 8発の散弾を広範囲に散らす
   },
   sniper: {
     id:'sniper', name:'スナイパー', icon:'🎯', ammoType:'sniper',
-    magSize:5, fireCooldown:0.85, damageBody:85, damageHead:150, color:0xa855f7
+    magSize:5, fireCooldown:0.85, damageBody:85, damageHead:150, color:0xa855f7,
+    adsFov:22, spreadHip:0.045, spreadAds:0.0005, pellets:1, maxRange:240
   }
 };
 
@@ -548,56 +577,6 @@ const APP = {
 };
 
 // ==========================================
-// 必須グローバル変数（プレイヤー・カメラ・ワールド・入力）
-// ==========================================
-const keys = {};
-const joystick = { active:false, touchId:null, dx:0, dy:0 };
-const camCtrl = {
-  yaw: Math.PI,
-  pitch: 0.28,
-  dist: 6.2,
-  targetDist: 6.2,
-  touchId: null,
-  lastX: 0,
-  lastY: 0
-};
-const player = {
-  pos: new THREE.Vector3(0, 0, 20),
-  vel: new THREE.Vector3(0, 0, 0),
-  rotY: Math.PI,
-  fpsYaw: Math.PI,
-  fpsPitch: 0,
-  radius: 0.48,
-  height: 1.7,
-  speed: 10.5,
-  jumpForce: 11.5,
-  onGround: true,
-  mesh: null,
-  weaponMesh: null,
-  disguise: null,
-  locked: false,
-  lockedRotY: 0,
-  targetedProp: null,
-  targetedPickup: null,
-  skillCooldown: 0,
-  skillMaxCooldown: 3.0,
-  dashTimer: 0,
-  tauntCooldown: 0
-};
-
-let worldGroup = new THREE.Group();
-let colliders = [];
-let propsList = [];
-let jumpPads = [];
-let coinsList = [];
-let seekersList = [];
-let runnersList = [];
-let fxList = [];
-let fpsBots = [];
-let remotePlayers = {};
-const raycaster = new THREE.Raycaster();
-
-// ==========================================
 // Sound Engine
 // ==========================================
 class SoundEngine {
@@ -632,12 +611,21 @@ class SoundEngine {
   playLock(l){this.playTone(l?540:620,'sine',0.12,0.18,l?740:420);}
   playTaunt(){[659.25,783.99,1046.5].forEach((n,i)=>setTimeout(()=>this.playTone(n,'sine',0.13,0.22),i*90));}
   playPickup(){this.playTone(880,'sine',0.08,0.18);setTimeout(()=>this.playTone(1174.66,'sine',0.14,0.18),65);}
+  playChestTick(){this.playTone(520,'sine',0.05,0.08,620);}
   playHeal(){this.playTone(523.25,'sine',0.12,0.2);setTimeout(()=>this.playTone(783.99,'sine',0.2,0.2),90);}
   playDrop(){this.playTone(420,'triangle',0.1,0.16,220);}
   playHit(){this.playTone(150,'sawtooth',0.35,0.32,48);}
   playStun(){this.playTone(220,'sawtooth',0.4,0.25,95);}
   playTeleport(){this.playTone(440,'sine',0.25,0.22,1200);}
-  playShot(){this.playTone(180,'square',0.09,0.22,60);this.playTone(900,'triangle',0.05,0.12,300);}
+  playShot(isShotgun=false){
+    if(isShotgun){
+      this.playTone(115,'sawtooth',0.22,0.32,38);
+      this.playTone(620,'square',0.12,0.2,120);
+    } else {
+      this.playTone(180,'square',0.09,0.22,60);
+      this.playTone(900,'triangle',0.05,0.12,300);
+    }
+  }
   playReload(){this.playTone(300,'sine',0.08,0.15,200);setTimeout(()=>this.playTone(400,'sine',0.08,0.15,600),90);}
   playTargetHit(){this.playTone(1200,'sine',0.06,0.2);setTimeout(()=>this.playTone(1600,'sine',0.1,0.18),40);}
   playKill(){[523.25,659.25,783.99,1046.5].forEach((n,i)=>setTimeout(()=>this.playTone(n,'triangle',0.12,0.2),i*45));}
@@ -827,7 +815,7 @@ function animateCharacter(charMesh,dt,moveSpeed,isGrounded){
 }
 
 // ==========================================
-// ロブロックス風 頭上ネームタグ（かくれんぼ隠れる側・FPS敵は非表示）
+// ロブロックス風 頭上ネームタグ
 // ==========================================
 function shouldShowNametagForRemote(remotePlayerData){
   if(!remotePlayerData) return false;
@@ -908,7 +896,7 @@ function attachNametag(mesh, text, team=null, hp=100, maxHp=100, yOffset=2.75, v
 }
 
 // ==========================================
-// Three.js セットアップ
+// Three.js セットアップ & グローバル変数初期化
 // ==========================================
 const container=document.getElementById('canvas-container');
 const scene=new THREE.Scene();
@@ -936,18 +924,68 @@ window.addEventListener('resize',()=>{
   renderer.setSize(window.innerWidth,window.innerHeight);
 });
 
+let worldGroup = new THREE.Group();
+scene.add(worldGroup);
+
+const raycaster = new THREE.Raycaster();
+const keys = {};
+const joystick = { active:false, touchId:null, dx:0, dy:0 };
+const camCtrl = { yaw:0, pitch:0.35, dist:6.2, targetDist:6.2, touchId:null, lastX:0, lastY:0 };
+
+const player = {
+  mesh: null,
+  weaponMesh: null,
+  pos: new THREE.Vector3(0, 0, 0),
+  vel: new THREE.Vector3(0, 0, 0),
+  rotY: 0,
+  fpsYaw: 0,
+  fpsPitch: 0,
+  radius: 0.48,
+  height: 1.7,
+  speed: 10.5,
+  jumpForce: 11.5,
+  onGround: true,
+  disguise: null,
+  locked: false,
+  lockedRotY: 0,
+  skillCooldown: 0,
+  skillMaxCooldown: 4.0,
+  dashTimer: 0,
+  tauntCooldown: 0,
+  targetedProp: null,
+  targetedPickup: null,
+  targetedDropItem: null
+};
+
+let colliders = [];
+let propsList = [];
+let jumpPads = [];
+let coinsList = [];
+let seekersList = [];
+let runnersList = [];
+let fxList = [];
+let fpsBots = [];
+let remotePlayers = {};
+
 // ==========================================
-// Game State & フォートナイト風5スロットホットバー＆弾薬ポーチ
+// Game State & 5スロットホットバー＆弾薬ポーチ
 // ==========================================
 const gameState={
   screen:'auth',mode:'fps',tagRole:'runner',phRole:'hider',
-  timer:FPS_MATCH_DURATION_SEC,score:0,hp:3,maxHp:3,invulnTimer:0,lastTime:performance.now(),
+  timer:FPS_MATCH_DURATION_SEC,score:0,hp:3,maxHp:3,invulnTimer:0,lastTime:0,
   paused:false,
   bagOpen:false,
   seekerStunTimer:0,
   prophuntSeekerDeployed:false,
   chestSpawnTimer:6.0,
   ammoCrateSpawnTimer:9.0,
+  // 入力・照準状態
+  isFireHeld:false,
+  isAiming:false,
+  isInteractHeld:false,
+  chestHoldTimer:0,
+  chestHoldTarget:null,
+  chestHoldTickAccum:0,
   stats:{morphCount:0,tauntCount:0,coinsCollected:0,tagsMade:0,kills:0,deaths:0},
   fps:{
     team:'blue',
@@ -994,18 +1032,18 @@ function getCurrentHealDef(){
   return null;
 }
 
-function addItemToHotbar(kind, itemId){
+function addItemToHotbar(kind, itemId, magOverride=null){
   const emptyIdx = gameState.fps.slots.findIndex(s => s === null);
   if(emptyIdx === -1){
-    pushToast('⚠️ 5枠すべて埋まっています！アイテムを落とすか空きを作ってください','text-rose-300');
     return false;
   }
   gameState.fps.slots[emptyIdx] = { kind, itemId };
   if(kind === 'weapon' && WEAPON_DEFS[itemId]){
-    gameState.fps.magAmmo[itemId] = WEAPON_DEFS[itemId].magSize;
+    gameState.fps.magAmmo[itemId] = (magOverride !== null) ? magOverride : WEAPON_DEFS[itemId].magSize;
   }
   renderHotbarUI();
   rebuildGunMeshForCurrentSlot();
+  updateFPSHUD();
   return true;
 }
 
@@ -1027,51 +1065,104 @@ function useSelectedHeal(){
   updateFPSHUD();
 }
 
-function dropHotbarSlotItem(slotIndex){
-  if(gameState.mode !== 'fps' || gameState.screen !== 'playing' || gameState.paused) return;
+function dropHotbarSlotItem(slotIndex, customOrigin=null, broadcast=true){
+  if(gameState.mode !== 'fps' || gameState.screen !== 'playing') return;
   const slot = gameState.fps.slots[slotIndex];
   if(!slot) return;
 
   const def = slot.kind === 'weapon' ? WEAPON_DEFS[slot.itemId] : HEAL_DEFS[slot.itemId];
   if(!def) return;
 
-  const forward = new THREE.Vector3(-Math.sin(player.fpsYaw), 0, -Math.cos(player.fpsYaw));
-  const dropPos = player.pos.clone().addScaledVector(forward, 1.8);
-  dropPos.y = 0;
+  let dropX, dropZ;
+  if(customOrigin){
+    dropX = customOrigin.x;
+    dropZ = customOrigin.z;
+  } else {
+    const forward = new THREE.Vector3(-Math.sin(player.fpsYaw), 0, -Math.cos(player.fpsYaw));
+    const dropPos = player.pos.clone().addScaledVector(forward, 1.8);
+    dropX = dropPos.x;
+    dropZ = dropPos.z;
+  }
 
-  spawnDroppedWorldItem(slot.kind, slot.itemId, 1, dropPos.x, dropPos.z);
+  spawnDroppedWorldItem(slot.kind, slot.itemId, 1, dropX, dropZ, broadcast);
   gameState.fps.slots[slotIndex] = null;
-  sound.playDrop();
-  pushToast(`📤 ${def.name} をドロップしました`,'text-amber-300');
+  if(!customOrigin) sound.playDrop();
+  if(!customOrigin) pushToast(`📤 ${def.name} をドロップしました`,'text-amber-300');
   renderHotbarUI();
   rebuildGunMeshForCurrentSlot();
+  updateFPSHUD();
   if(gameState.bagOpen) renderBagUI();
 }
 
-function dropAmmoType(ammoType, amount=30){
-  if(gameState.mode !== 'fps' || gameState.screen !== 'playing' || gameState.paused) return;
+function dropAmmoType(ammoType, amount=30, customOrigin=null, broadcast=true){
+  if(gameState.mode !== 'fps' || gameState.screen !== 'playing') return;
   const current = gameState.fps.ammoPool[ammoType] || 0;
   if(current <= 0){
-    pushToast('⚠️ 落とせる弾薬がありません','text-rose-300');
+    if(!customOrigin) pushToast('⚠️ 落とせる弾薬がありません','text-rose-300');
     return;
   }
   const dropCount = Math.min(current, amount);
   gameState.fps.ammoPool[ammoType] = current - dropCount;
 
-  const forward = new THREE.Vector3(-Math.sin(player.fpsYaw), 0, -Math.cos(player.fpsYaw));
-  const dropPos = player.pos.clone().addScaledVector(forward, 1.8);
-  dropPos.y = 0;
+  let dropX, dropZ;
+  if(customOrigin){
+    dropX = customOrigin.x;
+    dropZ = customOrigin.z;
+  } else {
+    const forward = new THREE.Vector3(-Math.sin(player.fpsYaw), 0, -Math.cos(player.fpsYaw));
+    const dropPos = player.pos.clone().addScaledVector(forward, 1.8);
+    dropX = dropPos.x;
+    dropZ = dropPos.z;
+  }
 
-  spawnDroppedWorldItem('ammo', ammoType, dropCount, dropPos.x, dropPos.z);
-  sound.playDrop();
-  pushToast(`📤 ${AMMO_DEFS[ammoType].name} ×${dropCount} をドロップしました`,'text-amber-300');
+  spawnDroppedWorldItem('ammo', ammoType, dropCount, dropX, dropZ, broadcast);
+  if(!customOrigin){
+    sound.playDrop();
+    pushToast(`📤 ${AMMO_DEFS[ammoType].name} ×${dropCount} をドロップしました`,'text-amber-300');
+  }
   updateFPSHUD();
   if(gameState.bagOpen) renderBagUI();
+}
+
+// 死亡時に敵・味方が所持していた全アイテム・弾薬を地面にドロップ
+function dropAllInventoryAtPosition(originPos, isSelf=true){
+  if(gameState.mode !== 'fps') return;
+  if(isSelf){
+    for(let i=0; i<5; i++){
+      if(gameState.fps.slots[i]){
+        const scatter = {
+          x: originPos.x + (Math.random()-0.5)*2.4,
+          z: originPos.z + (Math.random()-0.5)*2.4
+        };
+        dropHotbarSlotItem(i, scatter, true);
+      }
+    }
+    Object.keys(AMMO_DEFS).forEach(ammoType=>{
+      const amt = gameState.fps.ammoPool[ammoType] || 0;
+      if(amt > 0){
+        const scatter = {
+          x: originPos.x + (Math.random()-0.5)*2.6,
+          z: originPos.z + (Math.random()-0.5)*2.6
+        };
+        dropAmmoType(ammoType, amt, scatter, true);
+      }
+    });
+  } else {
+    // Bot撃破時：ランダムな武器1つ + 回復1つ + 弾薬をドロップ
+    const wKeys = Object.keys(WEAPON_DEFS);
+    const rWeapon = wKeys[Math.floor(Math.random()*wKeys.length)];
+    const rHeal = Math.random() < 0.5 ? 'heal25' : 'heal50';
+    const rAmmo = WEAPON_DEFS[rWeapon].ammoType;
+    spawnDroppedWorldItem('weapon', rWeapon, 1, originPos.x + (Math.random()-0.5)*1.8, originPos.z + (Math.random()-0.5)*1.8, true);
+    spawnDroppedWorldItem('heal', rHeal, 1, originPos.x + (Math.random()-0.5)*1.8, originPos.z + (Math.random()-0.5)*1.8, true);
+    spawnDroppedWorldItem('ammo', rAmmo, 40, originPos.x + (Math.random()-0.5)*1.8, originPos.z + (Math.random()-0.5)*1.8, true);
+  }
 }
 
 function selectHotbarSlot(index){
   if(index < 0 || index > 4) return;
   gameState.fps.selectedSlot = index;
+  if(!getCurrentWeaponDef()) setAimingState(false);
   renderHotbarUI();
   rebuildGunMeshForCurrentSlot();
   updateFPSHUD();
@@ -1115,6 +1206,8 @@ function renderHotbarUI(){
 function openBagModal(){
   if(gameState.mode !== 'fps' || gameState.screen !== 'playing' || gameState.paused) return;
   gameState.bagOpen = true;
+  gameState.isFireHeld = false;
+  setAimingState(false);
   leavePlayingMode();
   renderBagUI();
   document.getElementById('inventory-overlay').classList.add('show');
@@ -1180,11 +1273,29 @@ function renderBagUI(){
 }
 
 // ==========================================
-// 3D 宝箱・弾薬箱・ドロップアイテム管理
+// 3D 宝箱（E長押し1秒開錠・溢れたら落下）・弾薬箱・ドロップアイテム管理
 // ==========================================
 let supplyChests = [];
 let ammoCrates = [];
 let droppedWorldItems = [];
+let unsubscribeDrops = null;
+
+function createItemLabelSprite(text, color='#ffffff'){
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 56;
+  const c = canvas.getContext('2d');
+  c.font = '900 22px "M PLUS Rounded 1c", sans-serif';
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.lineWidth = 5; c.strokeStyle = 'rgba(0,0,0,0.92)';
+  c.strokeText(text, 128, 28);
+  c.fillStyle = color;
+  c.fillText(text, 128, 28);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false}));
+  sp.scale.set(2.0, 0.44, 1);
+  return sp;
+}
 
 function spawnSupplyChestAtRandom(){
   if(gameState.mode !== 'fps' || supplyChests.length >= 8) return;
@@ -1266,22 +1377,80 @@ function spawnAmmoCrateAtRandom(){
   ammoCrates.push(crateObj);
 }
 
-function spawnDroppedWorldItem(kind, itemId, count, x, z){
-  const color = kind === 'weapon' ? 0x38bdf8 : (kind === 'heal' ? 0x22c55e : 0xfbbf24);
+function spawnDroppedWorldItem(kind, itemId, count, x, z, broadcast=true, remoteDropId=null){
+  const dropId = remoteDropId || ('drop_' + Date.now() + '_' + Math.random().toString(36).substring(2,8));
+  if(droppedWorldItems.some(d => d.dropId === dropId)) return;
+
+  const color = kind === 'weapon' ? (WEAPON_DEFS[itemId]?.color || 0x38bdf8) : (kind === 'heal' ? 0x22c55e : 0xfbbf24);
   const group = new THREE.Group();
-  const orb = new THREE.Mesh(
-    new THREE.BoxGeometry(0.75, 0.55, 0.75),
-    new THREE.MeshStandardMaterial({color, emissive:color, emissiveIntensity:0.45, roughness:0.35})
-  );
-  orb.position.y = 0.35; orb.castShadow = true; group.add(orb);
+
+  if(kind === 'weapon'){
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.26, 0.95),
+      new THREE.MeshStandardMaterial({color:0x1e293b, roughness:0.35, metalness:0.75})
+    );
+    body.position.y = 0.38; body.castShadow = true; group.add(body);
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry(0.25, 0.1, 0.72),
+      new THREE.MeshStandardMaterial({color, emissive:color, emissiveIntensity:0.65})
+    );
+    stripe.position.y = 0.45; group.add(stripe);
+  } else {
+    const orb = new THREE.Mesh(
+      new THREE.BoxGeometry(0.68, 0.5, 0.68),
+      new THREE.MeshStandardMaterial({color, emissive:color, emissiveIntensity:0.45, roughness:0.35})
+    );
+    orb.position.y = 0.32; orb.castShadow = true; group.add(orb);
+  }
+
+  let labelText = '';
+  let labelColor = '#ffffff';
+  if(kind === 'weapon' && WEAPON_DEFS[itemId]){
+    labelText = `${WEAPON_DEFS[itemId].icon} ${WEAPON_DEFS[itemId].name}`;
+    labelColor = '#7dd3fc';
+  } else if(kind === 'heal' && HEAL_DEFS[itemId]){
+    labelText = `${HEAL_DEFS[itemId].icon} ${HEAL_DEFS[itemId].name}`;
+    labelColor = '#6ee7b7';
+  } else if(kind === 'ammo' && AMMO_DEFS[itemId]){
+    labelText = `${AMMO_DEFS[itemId].icon} ${AMMO_DEFS[itemId].name} ×${count}`;
+    labelColor = '#fde047';
+  }
+  const labelSprite = createItemLabelSprite(labelText, labelColor);
+  labelSprite.position.set(0, 1.05, 0);
+  group.add(labelSprite);
+
   group.position.set(x, 0, z);
   worldGroup.add(group);
 
-  const dropObj = { mesh: group, kind, itemId, count, x, z, age:0 };
-  group.traverse(c=>{ if(c.isMesh) c.userData.pickupRef = { type:'drop', ref:dropObj }; });
+  const dropObj = { dropId, mesh: group, kind, itemId, count, x, z, age:0, labelText };
+  group.traverse(c=>{ if(c.isMesh) c.userData.dropRef = dropObj; });
   droppedWorldItems.push(dropObj);
+
+  if(broadcast && window.FB && APP.ready){
+    try{
+      window.FB.rtSet(window.FB.rtRef(window.FB.rtdb, `servers/${APP.serverId}/drops/${dropId}`), {
+        dropId, kind, itemId, count,
+        x: +x.toFixed(2), z: +z.toFixed(2),
+        ts: Date.now()
+      }).catch(()=>{});
+    }catch(e){}
+  }
 }
 
+function removeDroppedWorldItem(dropObj, syncRemote=true){
+  const idx = droppedWorldItems.indexOf(dropObj);
+  if(idx !== -1){
+    worldGroup.remove(dropObj.mesh);
+    droppedWorldItems.splice(idx, 1);
+  }
+  if(syncRemote && dropObj?.dropId && window.FB && APP.ready){
+    try{
+      window.FB.rtRemove(window.FB.rtRef(window.FB.rtdb, `servers/${APP.serverId}/drops/${dropObj.dropId}`)).catch(()=>{});
+    }catch(e){}
+  }
+}
+
+// 宝箱を開けた時：インベントリに入らないアイテムは宝箱の足元にドロップ！
 function openSupplyChest(chestObj){
   const idx = supplyChests.indexOf(chestObj);
   if(idx === -1) return;
@@ -1292,20 +1461,46 @@ function openSupplyChest(chestObj){
   const wDef = WEAPON_DEFS[weaponId];
   const aDef = AMMO_DEFS[ammoType];
 
+  let droppedCount = 0;
+
+  // 1. 武器をインベントリへ。満杯ならその場にドロップ
   const addedGun = addItemToHotbar('weapon', weaponId);
+  if(!addedGun){
+    spawnDroppedWorldItem('weapon', weaponId, 1, chestObj.x + (Math.random()-0.5)*1.5, chestObj.z + (Math.random()-0.5)*1.5, true);
+    droppedCount++;
+  }
+
+  // 2. 回復2個をインベントリへ。入らない分はその場にドロップ
   let addedHealCount = 0;
-  heals.forEach(hId=>{
-    if(addItemToHotbar('heal', hId)) addedHealCount++;
+  heals.forEach((hId, i)=>{
+    if(addItemToHotbar('heal', hId)){
+      addedHealCount++;
+    } else {
+      const ang = (i + 1) * 1.4;
+      spawnDroppedWorldItem('heal', hId, 1, chestObj.x + Math.cos(ang)*1.2, chestObj.z + Math.sin(ang)*1.2, true);
+      droppedCount++;
+    }
   });
+
+  // 3. 弾薬は弾薬ポーチへ
   gameState.fps.ammoPool[ammoType] = (gameState.fps.ammoPool[ammoType] || 0) + ammoCount;
 
   sound.playPickup();
+  spawn3DBurst(chestObj.x, 1.0, chestObj.z, 0xfbbf24, 18);
   updateFPSHUD();
+
   const healNames = heals.map(id=>HEAL_DEFS[id].name).join('＆');
-  pushToast(
-    `🎁 宝箱獲得！ ${wDef.icon}${wDef.name}${addedGun?'':'(枠満)'} / ${healNames}(${addedHealCount}個) / ${aDef.name}+${ammoCount}発`,
-    'text-amber-300'
-  );
+  if(droppedCount > 0){
+    pushToast(
+      `🎁 宝箱開錠！ 枠満杯の${droppedCount}個は地面にドロップしました（${aDef.name}+${ammoCount}発）`,
+      'text-amber-300'
+    );
+  } else {
+    pushToast(
+      `🎁 宝箱開錠！ ${wDef.icon}${wDef.name} / ${healNames} / ${aDef.name}+${ammoCount}発`,
+      'text-amber-300'
+    );
+  }
 }
 
 function openAmmoCrate(crateObj){
@@ -1323,39 +1518,88 @@ function openAmmoCrate(crateObj){
   pushToast(`🔋 弾薬箱獲得！ 全種類の弾を${crateObj.ammoEach}発ずつ入手！`,'text-sky-300');
 }
 
-function collectDroppedItem(dropObj){
-  const idx = droppedWorldItems.indexOf(dropObj);
-  if(idx === -1) return;
+// 落ちているアイテムをEキーで拾う（銃を持ちながら拾ったらその時手持ちのアイテムと交換！）
+function pickupOrSwapDroppedItem(dropObj){
+  if(!dropObj) return;
 
+  // 弾薬の場合はそのままポーチへ回収
   if(dropObj.kind === 'ammo'){
     gameState.fps.ammoPool[dropObj.itemId] = (gameState.fps.ammoPool[dropObj.itemId] || 0) + dropObj.count;
-    worldGroup.remove(dropObj.mesh);
-    droppedWorldItems.splice(idx, 1);
+    removeDroppedWorldItem(dropObj, true);
     sound.playPickup();
     updateFPSHUD();
     pushToast(`🔹 ${AMMO_DEFS[dropObj.itemId].name} ×${dropObj.count} を回収！`,'text-amber-300');
-  } else {
-    if(addItemToHotbar(dropObj.kind, dropObj.itemId)){
-      worldGroup.remove(dropObj.mesh);
-      droppedWorldItems.splice(idx, 1);
-      sound.playPickup();
-      const def = dropObj.kind === 'weapon' ? WEAPON_DEFS[dropObj.itemId] : HEAL_DEFS[dropObj.itemId];
-      pushToast(`✨ ${def.icon}${def.name} を手持ちに回収！`,'text-emerald-300');
-    }
+    return;
   }
+
+  const selIdx = gameState.fps.selectedSlot;
+  const heldSlot = gameState.fps.slots[selIdx];
+  const emptyIdx = gameState.fps.slots.findIndex(s => s === null);
+
+  // 銃（またはアイテム）を手持ちに持っている状態でEを押したら、手持ちと交換！
+  // ※空き枠がある場合でも、ユーザーが「銃を持ちながら落ちているアイテムをEで拾ったらその時手持ちのアイテムと交換して」と指定しているため、
+  //   手持ちスロットに武器（またはアイテム）がある場合はその手持ちスロットと交換し、手持ちスロットが空きの場合はそのまま空きスロットへ入れる。
+  if(heldSlot){
+    const oldDef = heldSlot.kind === 'weapon' ? WEAPON_DEFS[heldSlot.itemId] : HEAL_DEFS[heldSlot.itemId];
+    const newDef = dropObj.kind === 'weapon' ? WEAPON_DEFS[dropObj.itemId] : HEAL_DEFS[dropObj.itemId];
+
+    // 地面のアイテムを削除
+    const dropX = dropObj.x;
+    const dropZ = dropObj.z;
+    const newKind = dropObj.kind;
+    const newItemId = dropObj.itemId;
+    removeDroppedWorldItem(dropObj, true);
+
+    // 持っていたアイテムをその場に落とす
+    spawnDroppedWorldItem(heldSlot.kind, heldSlot.itemId, 1, dropX, dropZ, true);
+
+    // 拾ったアイテムを手持ちスロットにセット
+    gameState.fps.slots[selIdx] = { kind: newKind, itemId: newItemId };
+    if(newKind === 'weapon' && WEAPON_DEFS[newItemId]){
+      gameState.fps.magAmmo[newItemId] = WEAPON_DEFS[newItemId].magSize;
+    }
+
+    sound.playPickup();
+    renderHotbarUI();
+    rebuildGunMeshForCurrentSlot();
+    updateFPSHUD();
+    pushToast(`🔄 ${oldDef.name} と ${newDef.icon}${newDef.name} を交換！`,'text-emerald-300');
+  } else if(emptyIdx !== -1){
+    const newKind = dropObj.kind;
+    const newItemId = dropObj.itemId;
+    const newDef = newKind === 'weapon' ? WEAPON_DEFS[newItemId] : HEAL_DEFS[newItemId];
+    removeDroppedWorldItem(dropObj, true);
+
+    gameState.fps.slots[selIdx] = { kind: newKind, itemId: newItemId };
+    if(newKind === 'weapon' && WEAPON_DEFS[newItemId]){
+      gameState.fps.magAmmo[newItemId] = WEAPON_DEFS[newItemId].magSize;
+    }
+    sound.playPickup();
+    renderHotbarUI();
+    rebuildGunMeshForCurrentSlot();
+    updateFPSHUD();
+    pushToast(`✨ ${newDef.icon}${newDef.name} を拾いました！`,'text-emerald-300');
+  }
+}
+
+function resetChestHoldUI(){
+  gameState.chestHoldTimer = 0;
+  gameState.chestHoldTarget = null;
+  gameState.chestHoldTickAccum = 0;
+  const ui = document.getElementById('chest-hold-ui');
+  if(ui) ui.classList.add('hidden');
+  const bar = document.getElementById('chest-hold-bar');
+  if(bar) bar.style.width = '0%';
 }
 
 function updatePickupsAndProximity(dt){
   const time = performance.now() * 0.003;
   supplyChests.forEach(c=>{
     if(c.beacon) c.beacon.rotation.y = time;
-    if(Math.hypot(player.pos.x - c.x, player.pos.z - c.z) < 2.3){
-      openSupplyChest(c);
-    }
   });
   ammoCrates.forEach(c=>{
     if(c.beacon) c.beacon.rotation.y = -time;
-    if(Math.hypot(player.pos.x - c.x, player.pos.z - c.z) < 2.3){
+    if(Math.hypot(player.pos.x - c.x, player.pos.z - c.z) < 2.2){
       openAmmoCrate(c);
     }
   });
@@ -1363,52 +1607,155 @@ function updatePickupsAndProximity(dt){
   for(let i=droppedWorldItems.length-1; i>=0; i--){
     const d = droppedWorldItems[i];
     d.age += dt;
-    if(d.age > 0.8 && Math.hypot(player.pos.x - d.x, player.pos.z - d.z) < 2.2){
-      collectDroppedItem(d);
+    d.mesh.children[0].rotation.y = time * 0.9;
+    // 弾薬だけは近づくだけで自動回収
+    if(d.kind === 'ammo' && d.age > 0.6 && Math.hypot(player.pos.x - d.x, player.pos.z - d.z) < 2.0){
+      pickupOrSwapDroppedItem(d);
     }
   }
 
-  let nearPickup = null;
+  // 近くの宝箱・弾薬箱・ドロップアイテムを検索
+  let nearChest = null;
+  let minChestDist = 3.8;
   for(const c of supplyChests){
-    if(Math.hypot(player.pos.x - c.x, player.pos.z - c.z) < 3.6){
-      nearPickup = { type:'chest', ref:c, label:'宝箱回収（銃1・回復2・弾70発）' };
+    const d = Math.hypot(player.pos.x - c.x, player.pos.z - c.z);
+    if(d < minChestDist){
+      minChestDist = d;
+      nearChest = c;
+    }
+  }
+
+  let nearDrop = null;
+  let minDropDist = 3.2;
+  for(const dItem of droppedWorldItems){
+    if(dItem.kind === 'ammo') continue;
+    const d = Math.hypot(player.pos.x - dItem.x, player.pos.z - dItem.z);
+    if(d < minDropDist){
+      minDropDist = d;
+      nearDrop = dItem;
+    }
+  }
+
+  let nearAmmoCrate = null;
+  for(const ac of ammoCrates){
+    if(Math.hypot(player.pos.x - ac.x, player.pos.z - ac.z) < 3.6){
+      nearAmmoCrate = ac;
       break;
     }
   }
-  if(!nearPickup){
-    for(const ac of ammoCrates){
-      if(Math.hypot(player.pos.x - ac.x, player.pos.z - ac.z) < 3.6){
-        nearPickup = { type:'ammoCrate', ref:ac, label:'弾薬箱回収（全弾60発ずつ）' };
-        break;
-      }
+
+  player.targetedPickup = nearChest ? { type:'chest', ref:nearChest } : (nearAmmoCrate ? { type:'ammoCrate', ref:nearAmmoCrate } : null);
+  player.targetedDropItem = nearDrop;
+
+  // Eキー長押しによる宝箱1秒開錠処理
+  if(gameState.isInteractHeld && nearChest && gameState.fps.respawnTimer <= 0){
+    if(gameState.chestHoldTarget !== nearChest){
+      gameState.chestHoldTarget = nearChest;
+      gameState.chestHoldTimer = 0;
+      gameState.chestHoldTickAccum = 0;
+    }
+    gameState.chestHoldTimer += dt;
+    gameState.chestHoldTickAccum += dt;
+    if(gameState.chestHoldTickAccum >= 0.25){
+      gameState.chestHoldTickAccum = 0;
+      sound.playChestTick();
+    }
+    const pct = Math.min(100, (gameState.chestHoldTimer / CHEST_OPEN_DURATION) * 100);
+    const holdUi = document.getElementById('chest-hold-ui');
+    holdUi.classList.remove('hidden');
+    document.getElementById('chest-hold-label').textContent = `📦 宝箱を開錠中... (${Math.max(0, CHEST_OPEN_DURATION - gameState.chestHoldTimer).toFixed(1)}秒)`;
+    document.getElementById('chest-hold-bar').style.width = `${pct}%`;
+
+    if(gameState.chestHoldTimer >= CHEST_OPEN_DURATION){
+      const targetToOpen = nearChest;
+      resetChestHoldUI();
+      openSupplyChest(targetToOpen);
+      return;
+    }
+  } else if(gameState.chestHoldTimer > 0){
+    resetChestHoldUI();
+  }
+
+  // プロンプト表示更新
+  const promptEl = document.getElementById('target-prompt');
+  const promptText = document.getElementById('target-prompt-text');
+  if(nearChest){
+    promptText.textContent = 'E長押し（1秒）で宝箱を開ける';
+    promptEl.classList.remove('opacity-0');
+  } else if(nearDrop){
+    const heldSlot = gameState.fps.slots[gameState.fps.selectedSlot];
+    const dropDef = nearDrop.kind === 'weapon' ? WEAPON_DEFS[nearDrop.itemId] : HEAL_DEFS[nearDrop.itemId];
+    if(heldSlot){
+      const heldDef = heldSlot.kind === 'weapon' ? WEAPON_DEFS[heldSlot.itemId] : HEAL_DEFS[heldSlot.itemId];
+      promptText.textContent = `Eで「${heldDef.name}」と「${dropDef.name}」を交換`;
+    } else {
+      promptText.textContent = `Eで「${dropDef.name}」を拾う`;
+    }
+    promptEl.classList.remove('opacity-0');
+  } else if(nearAmmoCrate){
+    promptText.textContent = 'Eで弾薬箱回収（全弾60発ずつ）';
+    promptEl.classList.remove('opacity-0');
+  } else {
+    promptEl.classList.add('opacity-0');
+  }
+}
+
+function triggerInteractPress(){
+  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen) return;
+  gameState.isInteractHeld = true;
+
+  if(gameState.mode === 'fps'){
+    // 落ちているアイテムがある場合はEを押した瞬間に交換/拾う（宝箱が優先で近い場合を除く）
+    if(player.targetedDropItem && !player.targetedPickup){
+      pickupOrSwapDroppedItem(player.targetedDropItem);
+      return;
+    }
+    if(player.targetedPickup && player.targetedPickup.type === 'ammoCrate'){
+      openAmmoCrate(player.targetedPickup.ref);
+      player.targetedPickup = null;
+      return;
+    }
+    if(player.targetedDropItem){
+      pickupOrSwapDroppedItem(player.targetedDropItem);
+      return;
     }
   }
 
-  const promptEl=document.getElementById('target-prompt'), promptText=document.getElementById('target-prompt-text');
-  if(nearPickup){
-    player.targetedPickup = nearPickup;
-    promptText.textContent = nearPickup.label;
-    promptEl.classList.remove('opacity-0');
-    return;
-  }
-  player.targetedPickup = null;
-}
-
-function triggerInteractE(){
-  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen) return;
-  if(player.targetedPickup){
-    if(player.targetedPickup.type === 'chest') openSupplyChest(player.targetedPickup.ref);
-    else if(player.targetedPickup.type === 'ammoCrate') openAmmoCrate(player.targetedPickup.ref);
-    player.targetedPickup = null;
-    return;
-  }
   if(gameState.mode==='prophunt'&&gameState.phRole==='hider'){
     triggerMorph();
   }
 }
 
+function triggerInteractRelease(){
+  gameState.isInteractHeld = false;
+  resetChestHoldUI();
+}
+
 // ==========================================
-// ポインターロック＆ESCメニュー（背景ぼかしなし）
+// 右クリック ADS（覗き込み）制御
+// ==========================================
+function setAimingState(aiming){
+  const nextAim = Boolean(aiming) && canUseGun() && gameState.screen==='playing' && !gameState.paused && !gameState.bagOpen && gameState.fps.respawnTimer<=0;
+  gameState.isAiming = nextAim;
+
+  const ch = document.getElementById('fps-crosshair');
+  const scopeOverlay = document.getElementById('sniper-scope-overlay');
+  const wDef = gameState.mode==='fps' ? getCurrentWeaponDef() : WEAPON_DEFS.rifle;
+
+  if(ch){
+    ch.classList.toggle('ads', nextAim);
+    ch.classList.toggle('shotgun', Boolean(wDef && wDef.id === 'shotgun'));
+  }
+
+  if(scopeOverlay){
+    const showScope = nextAim && wDef && wDef.id === 'sniper';
+    scopeOverlay.style.display = showScope ? 'block' : 'none';
+    if(player.weaponMesh) player.weaponMesh.visible = !showScope;
+  }
+}
+
+// ==========================================
+// ポインターロック＆ESCメニュー
 // ==========================================
 const canvasEl=renderer.domElement;
 function requestPointerLock(){
@@ -1428,7 +1775,15 @@ function exitPointerLock(){
 }
 function isPointerLocked(){return document.pointerLockElement===canvasEl;}
 function enterPlayingMode(){if(!gameState.bagOpen && !gameState.paused){document.body.classList.add('cursor-hidden');requestPointerLock();hideClickHint();}}
-function leavePlayingMode(){document.body.classList.remove('cursor-hidden');exitPointerLock();hideClickHint();}
+function leavePlayingMode(){
+  gameState.isFireHeld = false;
+  gameState.isInteractHeld = false;
+  resetChestHoldUI();
+  setAimingState(false);
+  document.body.classList.remove('cursor-hidden');
+  exitPointerLock();
+  hideClickHint();
+}
 
 const clickHintEl=document.getElementById('click-hint');
 function showClickHint(){if(gameState.screen==='playing'&&!gameState.paused&&!gameState.bagOpen&&!isPointerLocked())clickHintEl.classList.add('show');}
@@ -1443,31 +1798,57 @@ function canUseGun(){
 }
 
 canvasEl.addEventListener('mousedown',(e)=>{
-  if(e.button!==0 || gameState.bagOpen)return;
-  if(gameState.screen==='playing'&&!gameState.paused&&!isPointerLocked())requestPointerLock();
-  if(gameState.screen==='playing'&&!gameState.paused){
+  if(gameState.bagOpen) return;
+  if(gameState.screen==='playing'&&!gameState.paused&&!isPointerLocked()) requestPointerLock();
+  if(gameState.screen!=='playing'||gameState.paused) return;
+
+  if(e.button === 0){
     if(gameState.mode==='fps' && getCurrentHealDef()){
       useSelectedHeal();
       return;
     }
-    if(canUseGun()) shootGun();
+    if(canUseGun()){
+      gameState.isFireHeld = true;
+      shootGun();
+    }
+  } else if(e.button === 2){
+    e.preventDefault();
+    if(canUseGun()){
+      setAimingState(true);
+    }
   }
 });
 
+window.addEventListener('mouseup',(e)=>{
+  if(e.button === 0){
+    gameState.isFireHeld = false;
+  } else if(e.button === 2){
+    setAimingState(false);
+  }
+});
+
+canvasEl.addEventListener('contextmenu',(e)=>e.preventDefault());
+
 document.addEventListener('pointerlockchange',()=>{
   if(isPointerLocked()){hideClickHint();document.body.classList.add('cursor-hidden');}
-  else if(gameState.screen==='playing'&&!gameState.paused&&!gameState.bagOpen){showClickHint();document.body.classList.remove('cursor-hidden');}
+  else if(gameState.screen==='playing'&&!gameState.paused&&!gameState.bagOpen){
+    gameState.isFireHeld = false;
+    setAimingState(false);
+    showClickHint();
+    document.body.classList.remove('cursor-hidden');
+  }
 });
 
 document.addEventListener('mousemove',(e)=>{
   if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen||!isPointerLocked())return;
   const dx=e.movementX||0, dy=e.movementY||0;
+  const sensScale = gameState.isAiming ? 0.52 : 1.0;
   if(canUseGun() || gameState.mode==='fps'){
-    player.fpsYaw-=dx*0.0022;
-    player.fpsPitch=Math.max(-1.35,Math.min(1.35,player.fpsPitch-dy*0.0022));
+    player.fpsYaw -= dx * 0.0022 * sensScale;
+    player.fpsPitch = Math.max(-1.35, Math.min(1.35, player.fpsPitch - dy * 0.0022 * sensScale));
   } else {
-    camCtrl.yaw-=dx*0.004;
-    camCtrl.pitch=Math.max(-0.2,Math.min(1.3,camCtrl.pitch+dy*0.004));
+    camCtrl.yaw -= dx * 0.004;
+    camCtrl.pitch = Math.max(-0.2, Math.min(1.3, camCtrl.pitch + dy * 0.004));
   }
 });
 
@@ -1500,7 +1881,7 @@ window.addEventListener('keydown',(e)=>{
 });
 
 // ==========================================
-// 認証＆自動ログイン維持（失敗時も絶対にブロックしない）
+// 認証＆自動ログイン維持
 // ==========================================
 const authScreen=document.getElementById('auth-screen');
 const authStepLogin=document.getElementById('auth-step-login');
@@ -1743,7 +2124,7 @@ function refreshLobbyMatchUI(){
 }
 
 // ==========================================
-// ワールド構築（広大な220mステージ＆全モード障害物大量増設）
+// ワールド構築
 // ==========================================
 function build3DWorld(mode){
   scene.remove(worldGroup);
@@ -2006,7 +2387,7 @@ function buildFPSBattleArena(){
     pad.position.set(jp.x,0.11,jp.z);worldGroup.add(pad);jumpPads.push({x:jp.x,z:jp.z,radius:1.8,mesh:pad});
   });
 
-  for(let i=0;i<5;i++) spawnSupplyChestAtRandom();
+  for(let i=0;i<6;i++) spawnSupplyChestAtRandom();
   for(let i=0;i<5;i++) spawnAmmoCrateAtRandom();
 
   syncBotsWithHumanPriority();
@@ -2113,7 +2494,7 @@ function hasLineOfSight(fromPos, toPos){
 }
 
 // ==========================================
-// ゲーム開始（どんな状態でも確実に画面遷移＆開始できる）
+// ゲーム開始
 // ==========================================
 function startGame(mode, isLateJoin=false){
   try {
@@ -2127,6 +2508,12 @@ function startGame(mode, isLateJoin=false){
 
     sound.init();
     gameState.mode=mode;gameState.screen='playing';gameState.paused=false;gameState.bagOpen=false;
+    gameState.isFireHeld=false;
+    gameState.isAiming=false;
+    gameState.isInteractHeld=false;
+    resetChestHoldUI();
+    setAimingState(false);
+
     document.getElementById('inventory-overlay').classList.remove('show');
     gameState.score=0;gameState.hp=3;gameState.invulnTimer=0;
     gameState.seekerStunTimer=0;
@@ -2193,6 +2580,8 @@ function startGame(mode, isLateJoin=false){
     document.getElementById('hud-fps-teams').classList.add('hidden');document.getElementById('hud-fps-teams').classList.remove('flex');
     document.getElementById('hud-fps-hp-box').classList.add('hidden');document.getElementById('hud-fps-hp-box').classList.remove('flex');
     document.getElementById('btn-shoot-mobile').classList.add('hidden');
+    document.getElementById('btn-ads-mobile').classList.add('hidden');
+    document.getElementById('btn-interact-mobile').classList.add('hidden');
     document.getElementById('btn-use-heal').classList.add('hidden');
     document.getElementById('reticle-container').classList.remove('hidden');
     document.getElementById('btn-pause').classList.remove('hidden');
@@ -2210,6 +2599,8 @@ function startGame(mode, isLateJoin=false){
       document.getElementById('hud-fps-hp-box').classList.remove('hidden');document.getElementById('hud-fps-hp-box').classList.add('flex');
       document.getElementById('fps-hotbar').classList.remove('hidden');
       document.getElementById('btn-shoot-mobile').classList.remove('hidden');
+      document.getElementById('btn-ads-mobile').classList.remove('hidden');
+      document.getElementById('btn-interact-mobile').classList.remove('hidden');
       document.getElementById('btn-use-heal').classList.remove('hidden');
       document.getElementById('reticle-container').style.display='none';
       document.getElementById('fps-crosshair').style.display='block';
@@ -2225,7 +2616,7 @@ function startGame(mode, isLateJoin=false){
       updateFPSHUD();
       showBanner(
         activeMatch ? '⚡ 進行中の5分マッチに途中参加！' : (isBlue?'🔵 青チームに自動配属！':'🔴 赤チームに自動配属！'),
-        `敵名前非表示・宝箱＆弾薬箱出現中！（残り ${Math.ceil(gameState.timer)}秒）`
+        '宝箱はE長押し1秒開錠・右クリックでADS覗き込み・左長押し連射！'
       );
     } else if(mode==='tag'){
       modeBadge.textContent='3D 鬼ごっこ(2分)';modeBadge.className='px-2.5 py-0.5 rounded-lg text-xs font-black bg-rose-500 text-white';
@@ -2257,6 +2648,7 @@ function startGame(mode, isLateJoin=false){
         document.getElementById('fps-crosshair').style.display='block';
         document.getElementById('fps-hud').style.display='flex';
         document.getElementById('btn-shoot-mobile').classList.remove('hidden');
+        document.getElementById('btn-ads-mobile').classList.remove('hidden');
         const badge=document.getElementById('fps-team-badge');
         badge.textContent = '🔫 かくれんぼ鬼（銃攻撃）';
         badge.className = 'px-3 py-1 rounded-full text-xs font-black bg-rose-600 text-white shadow-lg';
@@ -2294,6 +2686,7 @@ function rebuildGunMeshForCurrentSlot(){
     player.weaponMesh = createWeaponMesh('red', 0xfbbf24);
     worldGroup.add(player.weaponMesh);
   }
+  setAimingState(gameState.isAiming);
 }
 
 function rebuildPlayerMesh(isSeeker){
@@ -2324,6 +2717,8 @@ function createWeaponMesh(team='blue', accentHex=0x38bdf8){
   const receiver=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.14,0.55),bodyMat);g.add(receiver);
   const barrel=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,0.45,10),bodyMat);
   barrel.rotation.x=Math.PI/2;barrel.position.set(0,0.02,-0.48);g.add(barrel);
+  const sight=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.055,0.12),accentMat);
+  sight.position.set(0,0.1,-0.02);g.add(sight);
   const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.04,0.35),accentMat);
   stripe.position.set(0,0.05,-0.05);g.add(stripe);
   const flash=new THREE.Mesh(new THREE.SphereGeometry(0.14,8,8),new THREE.MeshBasicMaterial({color:0xffd166,transparent:true,opacity:0}));
@@ -2344,7 +2739,7 @@ function createAIRunner(x,z,idx){
 }
 
 // ==========================================
-// アクション＆銃撃
+// アクション＆銃撃（連射・ADS・ショットガン散弾対応）
 // ==========================================
 function triggerMorph(){
   if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen||gameState.mode!=='prophunt'||gameState.phRole!=='hider')return;
@@ -2430,67 +2825,159 @@ function shootGun(){
     return;
   }
 
+  const isShotgun = (wDef.id === 'shotgun');
   gameState.fps.magAmmo[wDef.id] = curMag - 1;
   gameState.fps.fireCooldown = wDef.fireCooldown;
-  gameState.fps.recoil = 0.045;
-  sound.playShot();
+  gameState.fps.recoil = isShotgun ? 0.085 : 0.042;
+  sound.playShot(isShotgun);
   updateFPSHUD();
   if(gameState.bagOpen) renderBagUI();
   if(player.weaponMesh?.userData.muzzleFlash)player.weaponMesh.userData.muzzleFlash.material.opacity=1;
 
-  const camDir=new THREE.Vector3();camera.getWorldDirection(camDir);
-  const startPos=camera.position.clone().addScaledVector(camDir,0.8);startPos.y-=0.12;
+  const camDir = new THREE.Vector3();
+  camera.getWorldDirection(camDir);
+  const camRight = new THREE.Vector3().crossVectors(camDir, camera.up).normalize();
+  const camUp = new THREE.Vector3().crossVectors(camRight, camDir).normalize();
+  const startPos = camera.position.clone().addScaledVector(camDir, 0.8);
+  startPos.y -= 0.1;
 
-  raycaster.setFromCamera(new THREE.Vector2(0,0),camera);raycaster.near=0.05;raycaster.far=160;
-  let hitPoint=startPos.clone().addScaledVector(camDir,100);
-  let hitEnemy=null, isHeadshot=false, closestDist=160;
+  const pelletCount = wDef.pellets || 1;
+  const spreadAngle = gameState.isAiming ? wDef.spreadAds : wDef.spreadHip;
+  const maxRange = wDef.maxRange || 160;
 
-  const worldHits=raycaster.intersectObjects(worldGroup.children,true);
-  for(const h of worldHits){
-    let isChar=false, p=h.object;
-    while(p){if(p.userData?.joints||p.userData?.isNametag||p===player.weaponMesh){isChar=true;break;}p=p.parent;}
-    if(!isChar&&h.distance<closestDist){closestDist=h.distance;hitPoint=h.point.clone();break;}
+  // 複数ペレット（ショットガンは8発散弾、他は1発）のヒット集計
+  const remoteDmgMap = new Map();
+  const botDmgMap = new Map();
+  let anyHit = false;
+  let anyHeadshot = false;
+  let lastHitPoint = null;
+
+  for(let pIdx = 0; pIdx < pelletCount; pIdx++){
+    // 散弾の拡散ベクトルを計算（円形均等＋ランダム拡散）
+    let rx = 0, ry = 0;
+    if(pelletCount > 1){
+      const angle = (pIdx / pelletCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.45;
+      const distFactor = (pIdx === 0) ? 0.12 : (0.35 + Math.random() * 0.65);
+      rx = Math.cos(angle) * spreadAngle * distFactor;
+      ry = Math.sin(angle) * spreadAngle * distFactor;
+    } else {
+      rx = (Math.random() - 0.5) * 2 * spreadAngle;
+      ry = (Math.random() - 0.5) * 2 * spreadAngle;
+    }
+
+    const rayDir = camDir.clone()
+      .addScaledVector(camRight, rx)
+      .addScaledVector(camUp, ry)
+      .normalize();
+
+    raycaster.set(camera.position, rayDir);
+    raycaster.near = 0.05;
+    raycaster.far = maxRange;
+
+    let closestDist = maxRange;
+    let hitPoint = startPos.clone().addScaledVector(rayDir, Math.min(maxRange, 90));
+    let hitEnemy = null;
+    let isHeadshot = false;
+
+    const worldHits = raycaster.intersectObjects(worldGroup.children, true);
+    for(const h of worldHits){
+      let isIgnored = false, p = h.object;
+      while(p){
+        if(p.userData?.joints || p.userData?.isNametag || p === player.weaponMesh || p.userData?.dropRef || p.userData?.pickupRef){
+          isIgnored = true;
+          break;
+        }
+        p = p.parent;
+      }
+      if(!isIgnored && h.distance < closestDist){
+        closestDist = h.distance;
+        hitPoint = h.point.clone();
+        break;
+      }
+    }
+
+    Object.values(remotePlayers).forEach(rp=>{
+      if(rp.mode !== gameState.mode) return;
+      if(gameState.mode === 'fps'){
+        if(rp.team === gameState.fps.team || (rp.hp||0) <= 0) return;
+      } else if(gameState.mode === 'prophunt'){
+        if(rp.role === 'seeker') return;
+      }
+      const propH = rp.disguise ? PROP_DEFS[rp.disguise]?.height || 1.3 : 2.1;
+      const res = checkRayHitCharacter(raycaster.ray, rp.mesh.position, closestDist, propH);
+      if(res.hit){
+        closestDist = res.dist;
+        hitPoint = res.point;
+        hitEnemy = { type:'remote', target:rp };
+        isHeadshot = res.headshot;
+      }
+    });
+
+    if(gameState.mode === 'fps'){
+      fpsBots.forEach(bot=>{
+        if(bot.team === gameState.fps.team || bot.hp <= 0) return;
+        const res = checkRayHitCharacter(raycaster.ray, bot.pos, closestDist, 2.1);
+        if(res.hit){
+          closestDist = res.dist;
+          hitPoint = res.point;
+          hitEnemy = { type:'bot', target:bot };
+          isHeadshot = res.headshot;
+        }
+      });
+    }
+
+    spawnBulletTrail(startPos, hitPoint, wDef.color);
+    // 通信負荷抑制：ショットガンは代表3本、通常銃は全弾トレイル送信
+    if(pelletCount === 1 || pIdx % 3 === 0){
+      sendShotBeamToRemote(startPos, hitPoint, wDef.color);
+    }
+
+    if(hitEnemy){
+      anyHit = true;
+      if(isHeadshot) anyHeadshot = true;
+      lastHitPoint = hitPoint.clone();
+      const dmg = gameState.mode === 'prophunt' ? 1 : (isHeadshot ? wDef.damageHead : wDef.damageBody);
+
+      if(hitEnemy.type === 'remote'){
+        const prev = remoteDmgMap.get(hitEnemy.target.uid) || { target:hitEnemy.target, dmg:0, headshot:false };
+        prev.dmg += dmg;
+        if(isHeadshot) prev.headshot = true;
+        remoteDmgMap.set(hitEnemy.target.uid, prev);
+      } else {
+        const prev = botDmgMap.get(hitEnemy.target.id) || { target:hitEnemy.target, dmg:0, headshot:false };
+        prev.dmg += dmg;
+        if(isHeadshot) prev.headshot = true;
+        botDmgMap.set(hitEnemy.target.id, prev);
+      }
+    }
   }
 
-  Object.values(remotePlayers).forEach(rp=>{
-    if(rp.mode!==gameState.mode)return;
-    if(gameState.mode==='fps'){
-      if(rp.team===gameState.fps.team||(rp.hp||0)<=0)return;
-    } else if(gameState.mode==='prophunt'){
-      if(rp.role==='seeker')return;
+  if(anyHit && lastHitPoint){
+    const ch = document.getElementById('fps-crosshair');
+    ch.classList.add('hit');
+    setTimeout(()=>ch.classList.remove('hit'), 120);
+    sound.playTargetHit();
+    spawn3DBurst(lastHitPoint.x, lastHitPoint.y, lastHitPoint.z, anyHeadshot ? 0xfacc15 : 0xf43f5e, isShotgun ? 20 : 14);
+  }
+
+  remoteDmgMap.forEach(({ target, dmg, headshot })=>{
+    addFloatingSprite(target.mesh.position.x, target.mesh.position.y + 2.3, target.mesh.position.z,
+      gameState.mode === 'prophunt' ? 'HIT!' : (headshot ? `HEAD -${dmg}!` : `-${dmg}`),
+      headshot ? '#facc15' : '#fb7185');
+    sendHitEventToRemote(target.uid, dmg, headshot);
+    if(gameState.mode === 'prophunt'){
+      gameState.score += 200;
+      gameState.stats.tagsMade++;
+      pushToast(`🎯 変身中の相手 (${target.username}) に命中！ +200pt`, 'text-amber-300');
     }
-    const propH = rp.disguise ? PROP_DEFS[rp.disguise]?.height || 1.3 : 2.1;
-    const res=checkRayHitCharacter(raycaster.ray,rp.mesh.position,closestDist,propH);
-    if(res.hit){closestDist=res.dist;hitPoint=res.point;hitEnemy={type:'remote',target:rp};isHeadshot=res.headshot;}
   });
 
-  if(gameState.mode==='fps'){
-    fpsBots.forEach(bot=>{
-      if(bot.team===gameState.fps.team||bot.hp<=0)return;
-      const res=checkRayHitCharacter(raycaster.ray,bot.pos,closestDist,2.1);
-      if(res.hit){closestDist=res.dist;hitPoint=res.point;hitEnemy={type:'bot',target:bot};isHeadshot=res.headshot;}
-    });
-  }
-
-  spawnBulletTrail(startPos,hitPoint,wDef.color);
-  sendShotBeamToRemote(startPos,hitPoint,wDef.color);
-
-  if(hitEnemy){
-    const dmg = gameState.mode==='prophunt' ? 1 : (isHeadshot ? wDef.damageHead : wDef.damageBody);
-    const ch=document.getElementById('fps-crosshair');ch.classList.add('hit');setTimeout(()=>ch.classList.remove('hit'),120);
-    sound.playTargetHit();spawn3DBurst(hitPoint.x,hitPoint.y,hitPoint.z,isHeadshot?0xfacc15:0xf43f5e,14);
-    addFloatingSprite(hitPoint.x,hitPoint.y+0.4,hitPoint.z,gameState.mode==='prophunt'?'HIT!':(isHeadshot?`HEAD -${dmg}!`:`-${dmg}`),isHeadshot?'#facc15':'#fb7185');
-    if(hitEnemy.type==='remote'){
-      sendHitEventToRemote(hitEnemy.target.uid,dmg,isHeadshot);
-      if(gameState.mode==='prophunt'){
-        gameState.score+=200;
-        gameState.stats.tagsMade++;
-        pushToast(`🎯 変身中の相手 (${hitEnemy.target.username}) に命中！ +200pt`,'text-amber-300');
-      }
-    } else {
-      damageFPSBot(hitEnemy.target,dmg,isHeadshot);
-    }
-  }
+  botDmgMap.forEach(({ target, dmg, headshot })=>{
+    addFloatingSprite(target.pos.x, target.pos.y + 2.3, target.pos.z,
+      headshot ? `HEAD -${dmg}!` : `-${dmg}`,
+      headshot ? '#facc15' : '#fb7185');
+    damageFPSBot(target, dmg, headshot);
+  });
 }
 
 function checkRayHitCharacter(ray,charPos,maxDist,heightScale=2.1){
@@ -2507,7 +2994,7 @@ function spawnBulletTrail(start,end,color){
   const s = start instanceof THREE.Vector3 ? start : new THREE.Vector3(start.x,start.y,start.z);
   const e = end instanceof THREE.Vector3 ? end : new THREE.Vector3(end.x,end.y,end.z);
   const dist=s.distanceTo(e);if(dist<0.2)return;
-  const geom=new THREE.CylinderGeometry(0.035,0.035,dist,6);geom.rotateX(Math.PI/2);
+  const geom=new THREE.CylinderGeometry(0.032,0.032,dist,6);geom.rotateX(Math.PI/2);
   const mesh=new THREE.Mesh(geom,new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.9}));
   mesh.position.copy(s).lerp(e,0.5);mesh.lookAt(e);worldGroup.add(mesh);
   fxList.push({mesh,life:0.15,maxLife:0.15,type:'beam'});
@@ -2515,7 +3002,13 @@ function spawnBulletTrail(start,end,color){
 
 function damageFPSBot(bot,dmg,isHeadshot){
   bot.hp=Math.max(0,bot.hp-dmg);
-  if(bot.hp<=0){bot.deadTimer=3.0;bot.mesh.visible=false;onPlayerGotKill(bot.name,isHeadshot);}
+  if(bot.hp<=0){
+    const deathPos = bot.pos.clone();
+    bot.deadTimer=3.0;
+    bot.mesh.visible=false;
+    dropAllInventoryAtPosition(deathPos, false);
+    onPlayerGotKill(bot.name,isHeadshot);
+  }
 }
 
 function onPlayerGotKill(victimName,isHeadshot){
@@ -2524,7 +3017,7 @@ function onPlayerGotKill(victimName,isHeadshot){
     if(gameState.fps.team==='blue')gameState.fps.blueScore++;else gameState.fps.redScore++;
     updateMatchScoresInRTDB();
   }
-  pushToast(`⚔️ 敵を撃破！ (+${isHeadshot?150:100}pt)`,'text-amber-300');
+  pushToast(`⚔️ 敵を撃破！（ドロップ出現！） (+${isHeadshot?150:100}pt)`,'text-amber-300');
 }
 
 function takePlayerDamage(dmg,attackerName='鬼・敵プレイヤー'){
@@ -2535,10 +3028,14 @@ function takePlayerDamage(dmg,attackerName='鬼・敵プレイヤー'){
     const vig=document.getElementById('hit-vignette');vig.style.opacity='1';setTimeout(()=>{vig.style.opacity='0';},180);
     updateFPSHUD();
     if(gameState.fps.hp<=0){
+      // 自分が倒されたとき、持っていたアイテム＆弾薬をすべてその場にドロップ（敵も味方も拾える）
+      dropAllInventoryAtPosition(player.pos.clone(), true);
+      gameState.isFireHeld = false;
+      setAimingState(false);
       gameState.stats.deaths++;gameState.fps.respawnTimer=3.0;
       if(gameState.fps.team==='blue')gameState.fps.redScore++;else gameState.fps.blueScore++;
       updateMatchScoresInRTDB();
-      showBanner('💀 やられた！','3秒後にリスポーン...');
+      showBanner('💀 やられた！','所持アイテムをドロップしました（3秒後にリスポーン）');
     }
   } else {
     gameState.hp = Math.max(0, gameState.hp - 1);
@@ -2562,6 +3059,7 @@ function respawnFPSPlayer(){
     null, null, null
   ];
   gameState.fps.selectedSlot = 0;
+  gameState.fps.ammoPool = { rifle:70, smg:60, shotgun:30, sniper:20 };
   gameState.fps.magAmmo = { rifle:20, smg:30, shotgun:8, sniper:5 };
   player.pos.set((Math.random()-0.5)*22,0,gameState.fps.team==='blue'?78:-78);
   player.vel.set(0,0,0);player.fpsYaw=gameState.fps.team==='blue'?0:Math.PI;
@@ -2580,7 +3078,7 @@ function updateFPSHUD(){
     const mag = gameState.fps.magAmmo[wDef.id] ?? 0;
     const pool = gameState.fps.ammoPool[wDef.ammoType] ?? 0;
     document.getElementById('fps-ammo').innerHTML=`${mag} <small>/ ${pool}</small>`;
-    if(labelEl) labelEl.textContent = `${wDef.icon} ${wDef.name}（${AMMO_DEFS[wDef.ammoType].name}）`;
+    if(labelEl) labelEl.textContent = `${wDef.icon} ${wDef.name}${gameState.isAiming?' [ADS覗き中]':''}（${AMMO_DEFS[wDef.ammoType].name}）`;
   } else if(hDef){
     document.getElementById('fps-ammo').innerHTML=`${hDef.icon} <small>クリック/Hで使用</small>`;
     if(labelEl) labelEl.textContent = `${hDef.icon} ${hDef.name}`;
@@ -2651,9 +3149,9 @@ function resolveHorizontalCollisions(pos,radius,currentY){
             pos.z+=(dz/d)*ov;
           } else {
             const penLeft = Math.abs(pos.x - c.minX);
-            const penRight = Math.abs(pos.x - c.maxX);
+            const penRight = Math.abs(c.maxX - pos.x);
             const penTop = Math.abs(pos.z - c.minZ);
-            const penBottom = Math.abs(pos.z - c.maxZ);
+            const penBottom = Math.abs(c.maxZ - pos.z);
             const minPen = Math.min(penLeft, penRight, penTop, penBottom);
             if(minPen === penLeft) pos.x = c.minX - radius;
             else if(minPen === penRight) pos.x = c.maxX + radius;
@@ -2668,7 +3166,7 @@ function resolveHorizontalCollisions(pos,radius,currentY){
 }
 
 // ==========================================
-// Firebase Realtime Database サーバー完全同期（エラー耐性強化）
+// Firebase Realtime Database サーバー完全同期（ドロップ共有含む）
 // ==========================================
 let presenceTimer=null;
 let publishTimer=null;
@@ -2677,7 +3175,7 @@ let unsubscribeServers=null;
 let unsubscribeRoom=null;
 let unsubscribeHits=null;
 let unsubscribeShots=null;
-let currentSubscribedServer=null;
+currentSubscribedServer=null;
 
 function amIMatchHost(){
   const activeUids = getActiveOnlinePlayers().map(p=>p.uid).sort();
@@ -2921,6 +3419,733 @@ function startMatchAndPlayerSync(createNewMatch=true){
             pushToast(`🌐 ${p.username||'Player'} が参加しました！`,'text-sky-300');
           }
         }
+
+        rp.mode=p.mode;
+        rp.role=p.role;
+        rp.disguise=nextDisguise;
+        rp.targetPos.set(p.x,p.y,p.z);
+        if(typeof p.ry === 'number') rp.targetRotY = p.ry;
+        rp.hp=p.hp??100;
+        rp.username=p.username||'Player';
+        rp.mesh.visible=(p.mode==='fps' ? (rp.hp>0) : true);
+        if(rp.mesh.userData.nametag){
+          rp.mesh.userData.nametag.visible = showTag;
+          if(showTag){
+            updateRobloxNametag(rp.mesh.userData.nametag,rp.username,rp.team,rp.hp,p.mode==='fps'?100:0);
+          }
+        }
+      });
+
+      syncBotsWithHumanPriority();
+    }, ()=>{});
+
+    // 地面ドロップアイテムの全プレイヤーリアルタイム共有同期（敵も味方も拾える）
+    if(gameState.mode === 'fps'){
+      const dropsRef = FB.rtRef(FB.rtdb, `servers/${APP.serverId}/drops`);
+      if(createNewMatch){
+        FB.rtRemove(dropsRef).catch(()=>{});
+      }
+      unsubscribeDrops = FB.onValue(dropsRef, (snap)=>{
+        const dropsMap = snap.val() || {};
+        // 他のプレイヤーに拾われたドロップをローカルワールドからも消去
+        for(let i = droppedWorldItems.length - 1; i >= 0; i--){
+          const d = droppedWorldItems[i];
+          if(!dropsMap[d.dropId]){
+            worldGroup.remove(d.mesh);
+            droppedWorldItems.splice(i, 1);
+          }
+        }
+        // 他のプレイヤーや敵が落としたドロップをローカルワールドに出現させる
+        Object.values(dropsMap).forEach(dData=>{
+          if(!dData || !dData.dropId) return;
+          if(Date.now() - (dData.ts || 0) > 120000) return;
+          if(!droppedWorldItems.some(localD => localD.dropId === dData.dropId)){
+            spawnDroppedWorldItem(dData.kind, dData.itemId, dData.count || 1, dData.x, dData.z, false, dData.dropId);
+          }
+        });
+      }, ()=>{});
+    }
+
+    const myHitsRef=FB.rtRef(FB.rtdb,`servers/${APP.serverId}/hits/${myUid}`);
+    FB.rtRemove(myHitsRef).catch(()=>{});
+    unsubscribeHits=FB.onChildAdded(myHitsRef,(snap)=>{
+      const hit=snap.val();FB.rtRemove(snap.ref).catch(()=>{});
+      if(hit&&gameState.screen==='playing')takePlayerDamage(hit.dmg||25,hit.fromName||'鬼・敵プレイヤー');
+    }, ()=>{});
+
+    if(canUseGun() || gameState.mode==='fps'){
+      const shotsRef=FB.rtRef(FB.rtdb,`servers/${APP.serverId}/shots`);
+      const joinedAt = Date.now();
+      unsubscribeShots=FB.onChildAdded(shotsRef,(snap)=>{
+        const sh=snap.val();
+        if(!sh || sh.fromUid===myUid || (sh.ts||0) < joinedAt - 1000) return;
+        if(sh.start && sh.end && gameState.screen==='playing'){
+          spawnBulletTrail(sh.start, sh.end, sh.color || 0x38bdf8);
+        }
+        if(Date.now() - (sh.ts||0) > 4000) FB.rtRemove(snap.ref).catch(()=>{});
+      }, ()=>{});
+    }
+  } catch(e){
+    console.warn('startMatchAndPlayerSync fallback:', e);
+  }
+}
+
+function sendShotBeamToRemote(startPos, endPos, color){
+  if(!window.FB||!APP.ready||!APP.profile)return;
+  try{
+    window.FB.rtPush(window.FB.rtRef(window.FB.rtdb,`servers/${APP.serverId}/shots`),{
+      fromUid:APP.profile.uid,
+      start:{x:+startPos.x.toFixed(2),y:+startPos.y.toFixed(2),z:+startPos.z.toFixed(2)},
+      end:{x:+endPos.x.toFixed(2),y:+endPos.y.toFixed(2),z:+endPos.z.toFixed(2)},
+      color,
+      ts:Date.now()
+    }).catch(()=>{});
+  }catch(e){}
+}
+
+function sendHitEventToRemote(targetUid,dmg,isHeadshot=false){
+  if(!window.FB||!APP.ready||!APP.profile)return;
+  try{
+    window.FB.rtPush(window.FB.rtRef(window.FB.rtdb,`servers/${APP.serverId}/hits/${targetUid}`),{
+      fromUid:APP.profile.uid, fromName:APP.profile.username, dmg, isHeadshot, ts:Date.now()
+    }).catch(()=>{});
+    const rp=remotePlayers[targetUid];
+    if(rp && gameState.mode==='fps' && (rp.hp-dmg)<=0)onPlayerGotKill(rp.username,isHeadshot);
+  }catch(e){}
+}
+
+function stopActiveMatchSync(){
+  if(publishTimer){clearInterval(publishTimer);publishTimer=null;}
+  if(matchHostTimer){clearInterval(matchHostTimer);matchHostTimer=null;}
+  if(unsubscribeRoom){try{unsubscribeRoom();}catch(e){}unsubscribeRoom=null;}
+  if(unsubscribeDrops){try{unsubscribeDrops();}catch(e){}unsubscribeDrops=null;}
+  if(unsubscribeHits){try{unsubscribeHits();}catch(e){}unsubscribeHits=null;}
+  if(unsubscribeShots){try{unsubscribeShots();}catch(e){}unsubscribeShots=null;}
+  if(APP.profile?.uid&&window.FB&&APP.ready){
+    try{
+      window.FB.rtRemove(window.FB.rtRef(window.FB.rtdb,`servers/${APP.serverId}/players/${APP.profile.uid}`)).catch(()=>{});
+    }catch(e){}
+  }
+}
+
+function updateRemotePlayers(dt){
+  Object.values(remotePlayers).forEach(rp=>{
+    if(!rp.mesh)return;
+    const px=rp.mesh.position.x,pz=rp.mesh.position.z;
+    rp.mesh.position.lerp(rp.targetPos,Math.min(1,dt*14));
+    const sp=Math.hypot(rp.mesh.position.x-px,rp.mesh.position.z-pz)/Math.max(0.001,dt);
+
+    if(rp.disguise){
+      rp.mesh.rotation.y = lerpAngle(rp.mesh.rotation.y, rp.targetRotY ?? 0, dt*18);
+    } else if(typeof rp.targetRotY === 'number'){
+      const desiredRot = sp > 0.2 ? Math.atan2(rp.mesh.position.x-px,rp.mesh.position.z-pz) : rp.targetRotY;
+      rp.mesh.rotation.y = lerpAngle(rp.mesh.rotation.y, desiredRot, dt*14);
+    }
+
+    if(rp.mesh.userData.joints)animateCharacter(rp.mesh,dt,sp,true);
+
+    if(gameState.mode==='tag' && gameState.tagRole==='seeker' && gameState.seekerStunTimer<=0){
+      if(rp.role!=='seeker' && player.pos.distanceTo(rp.mesh.position) < 1.85){
+        triggerSeekerTagHitAndStun(rp.username || '逃走者', rp.uid);
+      }
+    }
+  });
+}
+
+function triggerSeekerTagHitAndStun(targetName, targetUid=null){
+  gameState.seekerStunTimer = 3.0;
+  gameState.stats.tagsMade++;
+  gameState.score += 250;
+  sound.playStun();
+  pushToast(`💥 逃走者に接触ダメージ！ 鬼は3秒間スタン！`,'text-amber-300');
+  showBanner('⚡ 3秒間スタン中！','逃走者に触れた反動で3秒間動けません...');
+  if(targetUid) sendHitEventToRemote(targetUid, 1, false);
+}
+
+// ==========================================
+// 更新ループ
+// ==========================================
+function update(dt){
+  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen)return;
+  gameState.timer-=dt;
+  if(player.skillCooldown>0)player.skillCooldown=Math.max(0,player.skillCooldown-dt);
+  if(player.dashTimer>0)player.dashTimer=Math.max(0,player.dashTimer-dt);
+  if(player.tauntCooldown>0)player.tauntCooldown=Math.max(0,player.tauntCooldown-dt);
+  if(gameState.invulnTimer>0)gameState.invulnTimer=Math.max(0,gameState.invulnTimer-dt);
+  if(gameState.seekerStunTimer>0)gameState.seekerStunTimer=Math.max(0,gameState.seekerStunTimer-dt);
+
+  const totalDur = getDurationForMode(gameState.mode);
+
+  if(gameState.mode === 'prophunt'){
+    const elapsed = computeElapsedSeconds(APP.latestMatch) || (totalDur - gameState.timer);
+    if(!gameState.prophuntSeekerDeployed && elapsed >= HIDE_PHASE_SEC){
+      gameState.prophuntSeekerDeployed = true;
+      if(gameState.phRole === 'seeker'){
+        player.pos.set((Math.random()-0.5)*20, 0, -28);
+        player.vel.set(0,0,0);
+        player.fpsYaw = 0;
+        sound.playTeleport();
+        spawn3DBurst(player.pos.x, 1.2, player.pos.z, 0xf43f5e, 24);
+        showBanner('🔫 試合場にテレポート完了！','30秒経過！隠れているプレイヤーを探して銃で撃て！');
+        publishPlayerStateNow();
+      } else {
+        sound.playTeleport();
+        showBanner('⚠️ 30秒経過！鬼が試合場に出現！','変身したまま見つからないように逃げ隠れしよう！');
+      }
+    }
+  }
+
+  // 長押し連続射撃処理
+  if(gameState.isFireHeld && canUseGun() && gameState.fps.fireCooldown <= 0 && gameState.fps.reloadTimer <= 0){
+    if(!(gameState.mode === 'fps' && gameState.fps.respawnTimer > 0)){
+      shootGun();
+    }
+  }
+
+  if(gameState.mode==='fps'){
+    gameState.chestSpawnTimer -= dt;
+    if(gameState.chestSpawnTimer <= 0){
+      gameState.chestSpawnTimer = 8.0 + Math.random() * 6.0;
+      spawnSupplyChestAtRandom();
+    }
+    gameState.ammoCrateSpawnTimer -= dt;
+    if(gameState.ammoCrateSpawnTimer <= 0){
+      gameState.ammoCrateSpawnTimer = 10.0 + Math.random() * 7.0;
+      spawnAmmoCrateAtRandom();
+    }
+    updatePickupsAndProximity(dt);
+
+    gameState.fps.fireCooldown=Math.max(0,gameState.fps.fireCooldown-dt);
+    if(gameState.fps.reloadTimer>0){
+      gameState.fps.reloadTimer-=dt;
+      if(gameState.fps.reloadTimer<=0){
+        const wDef = getCurrentWeaponDef();
+        if(wDef){
+          const need = wDef.magSize - (gameState.fps.magAmmo[wDef.id] || 0);
+          const avail = gameState.fps.ammoPool[wDef.ammoType] || 0;
+          const loadAmt = Math.min(need, avail);
+          gameState.fps.magAmmo[wDef.id] = (gameState.fps.magAmmo[wDef.id] || 0) + loadAmt;
+          gameState.fps.ammoPool[wDef.ammoType] = avail - loadAmt;
+        }
+        updateFPSHUD();
+      }
+    }
+    if(gameState.fps.respawnTimer>0){
+      gameState.fps.respawnTimer-=dt;
+      if(gameState.fps.respawnTimer<=0)respawnFPSPlayer();
+    }
+    updateFPSBots(dt);
+    if(gameState.timer<=0){
+      if(amIMatchHost()) finishMatchInRTDB();
+      const win = gameState.fps.team==='blue'?gameState.fps.blueScore>=gameState.fps.redScore:gameState.fps.redScore>=gameState.fps.blueScore;
+      endGame(win);return;
+    }
+  } else {
+    if(gameState.mode==='prophunt' && gameState.phRole==='seeker'){
+      gameState.fps.fireCooldown=Math.max(0,gameState.fps.fireCooldown-dt);
+      if(gameState.fps.reloadTimer>0){
+        gameState.fps.reloadTimer-=dt;
+        if(gameState.fps.reloadTimer<=0){
+          gameState.fps.magAmmo.rifle = WEAPON_DEFS.rifle.magSize;
+          updateFPSHUD();
+        }
+      }
+    }
+    if(gameState.timer<=0){
+      if(amIMatchHost()) finishMatchInRTDB();
+      endGame(true);return;
+    }
+  }
+
+  let fi=0,ri=0;
+  if(keys['KeyW']||keys['ArrowUp'])fi+=1;
+  if(keys['KeyS']||keys['ArrowDown'])fi-=1;
+  if(keys['KeyD']||keys['ArrowRight'])ri+=1;
+  if(keys['KeyA']||keys['ArrowLeft'])ri-=1;
+  if(joystick.active){fi=-joystick.dy;ri=joystick.dx;}
+  const mag=Math.hypot(fi,ri);if(mag>1){fi/=mag;ri/=mag;}
+
+  const isStunned = (gameState.mode==='tag' && gameState.tagRole==='seeker' && gameState.seekerStunTimer>0);
+  const canMove=!player.locked && !isStunned && !(gameState.mode==='fps'&&gameState.fps.respawnTimer>0);
+
+  let currentMoveSpeed=0;
+  if(canMove){
+    const yawForMove=(canUseGun() || gameState.mode==='fps')?player.fpsYaw:camCtrl.yaw;
+    const camForward=new THREE.Vector3(-Math.sin(yawForMove),0,-Math.cos(yawForMove));
+    const camRight=new THREE.Vector3(Math.cos(yawForMove),0,-Math.sin(yawForMove));
+    const moveDir=new THREE.Vector3().addScaledVector(camForward,fi).addScaledVector(camRight,ri);
+    const spMult=(player.dashTimer>0?1.95:1.0) * (gameState.isAiming?0.68:1.0);
+    player.vel.x+=(moveDir.x*player.speed*spMult-player.vel.x)*Math.min(1,dt*14);
+    player.vel.z+=(moveDir.z*player.speed*spMult-player.vel.z)*Math.min(1,dt*14);
+    currentMoveSpeed=Math.hypot(player.vel.x,player.vel.z);
+    if(currentMoveSpeed>0.4&&!canUseGun()&&gameState.mode!=='fps')player.rotY=lerpAngle(player.rotY,Math.atan2(player.vel.x,player.vel.z),dt*14);
+  } else {
+    player.vel.x=0;player.vel.z=0;
+  }
+
+  player.vel.y-=28.0*dt;
+  player.pos.x+=player.vel.x*dt;player.pos.z+=player.vel.z*dt;player.pos.y+=player.vel.y*dt;
+  resolveHorizontalCollisions(player.pos,player.radius,player.pos.y);
+  const groundY=getGroundHeightAt(player.pos.x,player.pos.z,player.radius,player.pos.y);
+  if(player.pos.y<=groundY){player.pos.y=groundY;player.vel.y=0;player.onGround=true;}
+  else player.onGround=false;
+
+  for(const jp of jumpPads){
+    if(Math.hypot(player.pos.x-jp.x,player.pos.z-jp.z)<jp.radius&&Math.abs(player.pos.y-0.1)<0.5){
+      player.vel.y=19.5;player.onGround=false;sound.playSpring();
+    }
+  }
+
+  if(player.mesh?.userData.joints)animateCharacter(player.mesh,dt,currentMoveSpeed,player.onGround);
+  if(player.mesh&&!canUseGun()&&gameState.mode!=='fps'){
+    player.mesh.position.copy(player.pos);player.mesh.rotation.y=player.locked?player.lockedRotY:player.rotY;
+  }
+
+  if(gameState.mode==='prophunt'&&gameState.phRole==='hider'&&!player.targetedPickup)updateCrosshairTarget();
+  updateAISeekers(dt);updateAIRunners(dt);updateRemotePlayers(dt);
+
+  if(canUseGun() || gameState.mode==='fps')updateFPSCamera(dt);
+  else {
+    if(camera.fov !== 65){ camera.fov = 65; camera.updateProjectionMatrix(); }
+    updateTPSCamera(dt);
+  }
+
+  update3DFX(dt);updateHUD();
+
+  if(canUseGun()&&player.weaponMesh){
+    const camDir=new THREE.Vector3();camera.getWorldDirection(camDir);
+    const right=new THREE.Vector3().crossVectors(camDir,camera.up).normalize();
+    const down=new THREE.Vector3().crossVectors(camDir,right).normalize();
+    // 右クリックADS覗き込み時は銃を画面中央・目の高さへ寄せる
+    const forwardOff = gameState.isAiming ? 0.44 : 0.55;
+    const rightOff   = gameState.isAiming ? 0.0  : 0.28;
+    const downOff    = gameState.isAiming ? 0.13 : 0.22;
+    const wPos=camera.position.clone()
+      .addScaledVector(camDir, forwardOff)
+      .addScaledVector(right, rightOff)
+      .addScaledVector(down, downOff);
+    player.weaponMesh.position.copy(wPos);
+    player.weaponMesh.quaternion.copy(camera.quaternion);
+    player.weaponMesh.rotateY(Math.PI);
+    if(gameState.fps.recoil>0){
+      player.weaponMesh.position.y += gameState.fps.recoil;
+      gameState.fps.recoil = Math.max(0, gameState.fps.recoil - dt * 0.35);
+    }
+    const flash=player.weaponMesh.userData.muzzleFlash;
+    if(flash&&flash.material.opacity>0)flash.material.opacity=Math.max(0,flash.material.opacity-dt*14);
+  }
+}
+
+function updateFPSBots(dt){
+  fpsBots.forEach(bot=>{
+    if(bot.deadTimer>0){
+      bot.deadTimer-=dt;
+      if(bot.deadTimer<=0){
+        bot.hp=bot.maxHp;bot.pos.set((Math.random()-0.5)*28,0,bot.team==='blue'?76:-76);
+        bot.mesh.visible=true;
+      }
+      return;
+    }
+
+    bot.moveTimer-=dt;
+    if(bot.moveTimer<=0){
+      bot.moveTimer=2.2+Math.random()*2;
+      bot.targetPos.set((Math.random()-0.5)*170,0,(Math.random()-0.5)*170);
+    }
+
+    const dir=new THREE.Vector3().subVectors(bot.targetPos,bot.pos);dir.y=0;
+    if(dir.length()>1){
+      dir.normalize();
+      bot.vel.x+=(dir.x*6.2-bot.vel.x)*Math.min(1,dt*4);
+      bot.vel.z+=(dir.z*6.2-bot.vel.z)*Math.min(1,dt*4);
+    } else {
+      bot.vel.x*=0.85;bot.vel.z*=0.85;
+    }
+
+    bot.pos.x+=bot.vel.x*dt;
+    bot.pos.z+=bot.vel.z*dt;
+    const hitWall = resolveHorizontalCollisions(bot.pos, 0.55, bot.pos.y);
+    if(hitWall){
+      bot.vel.x *= -0.3;
+      bot.vel.z *= -0.3;
+      bot.targetPos.set((Math.random()-0.5)*170, 0, (Math.random()-0.5)*170);
+      bot.moveTimer = 1.5;
+    }
+
+    bot.moveSpeed=Math.hypot(bot.vel.x,bot.vel.z);
+    if(bot.moveSpeed>0.4)bot.rotY=lerpAngle(bot.rotY,Math.atan2(bot.vel.x,bot.vel.z),dt*8);
+    bot.mesh.position.copy(bot.pos);bot.mesh.rotation.y=bot.rotY;
+    animateCharacter(bot.mesh,dt,bot.moveSpeed,true);
+
+    if(bot.team!==gameState.fps.team&&gameState.fps.respawnTimer<=0&&bot.pos.distanceTo(player.pos)<38){
+      const muzzlePos = bot.pos.clone().add(new THREE.Vector3(0,1.5,0));
+      const targetEyePos = player.pos.clone().add(new THREE.Vector3(0,1.35,0));
+      const los = hasLineOfSight(muzzlePos, targetEyePos);
+
+      if(los.clear){
+        bot.rotY=Math.atan2(player.pos.x-bot.pos.x,player.pos.z-bot.pos.z);
+        bot.mesh.rotation.y=bot.rotY;
+        bot.shootTimer-=dt;
+        if(bot.shootTimer<=0){
+          bot.shootTimer=1.8+Math.random();
+          const finalLos = hasLineOfSight(muzzlePos, targetEyePos);
+          const beamColor = bot.team==='blue'?0x38bdf8:0xf43f5e;
+          spawnBulletTrail(muzzlePos, finalLos.hitPoint, beamColor);
+          if(finalLos.clear && Math.random()<0.28){
+            takePlayerDamage(10, bot.name);
+          } else if(!finalLos.clear){
+            spawn3DBurst(finalLos.hitPoint.x, finalLos.hitPoint.y, finalLos.hitPoint.z, 0xfbbf24, 6);
+          }
+        }
+      }
+    }
+  });
+}
+
+function updateFPSCamera(dt=0.016){
+  const wDef = gameState.mode==='fps' ? getCurrentWeaponDef() : WEAPON_DEFS.rifle;
+  const targetFov = (gameState.isAiming && wDef) ? (wDef.adsFov || 48) : 65;
+  if(Math.abs(camera.fov - targetFov) > 0.05){
+    camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 16);
+    camera.updateProjectionMatrix();
+  }
+
+  const eyeY = (gameState.mode==='fps' && gameState.fps.respawnTimer>0) ? 8.0 : player.pos.y+1.55;
+  camera.position.set(player.pos.x,eyeY,player.pos.z);
+  const d=new THREE.Vector3(-Math.sin(player.fpsYaw)*Math.cos(player.fpsPitch),Math.sin(player.fpsPitch),-Math.cos(player.fpsYaw)*Math.cos(player.fpsPitch));
+  camera.lookAt(player.pos.x+d.x,eyeY+d.y,player.pos.z+d.z);
+}
+
+function updateCrosshairTarget(){
+  if(player.targetedPickup) return;
+  const promptEl=document.getElementById('target-prompt'),promptText=document.getElementById('target-prompt-text');
+  raycaster.setFromCamera(new THREE.Vector2(0,0),camera);raycaster.far=14;
+  let found=null;
+  for(const h of raycaster.intersectObjects(worldGroup.children,true)){
+    const ref=h.object.userData.propRef;
+    if(ref&&!ref.isNpcHider){found=ref;break;}
+  }
+  player.targetedProp=found;
+  if(found){promptText.textContent=`${found.def.name} に変身する`;promptEl.classList.remove('opacity-0');}
+  else promptEl.classList.add('opacity-0');
+}
+
+function updateAISeekers(dt){
+  seekersList.forEach(s=>{
+    if(s.stunTimer > 0){
+      s.stunTimer = Math.max(0, s.stunTimer - dt);
+      s.vel.set(0,0,0);
+      return;
+    }
+    const dist=s.pos.distanceTo(player.pos);
+    s.patrolTimer-=dt;
+    if(s.patrolTimer<=0){s.patrolTimer=2+Math.random()*2;s.targetPos.set((Math.random()-0.5)*180,0,(Math.random()-0.5)*180);}
+    const target=dist<30?player.pos:s.targetPos;
+    const dir=new THREE.Vector3().subVectors(target,s.pos);dir.y=0;if(dir.length()>0.2)dir.normalize();
+    s.vel.x+=(dir.x*s.baseSpeed-s.vel.x)*Math.min(1,dt*5);s.vel.z+=(dir.z*s.baseSpeed-s.vel.z)*Math.min(1,dt*5);
+    s.pos.x+=s.vel.x*dt;s.pos.z+=s.vel.z*dt;
+    const hitW = resolveHorizontalCollisions(s.pos,s.radius,0);
+    if(hitW){s.targetPos.set((Math.random()-0.5)*180,0,(Math.random()-0.5)*180);}
+    s.mesh.position.copy(s.pos);s.mesh.rotation.y=Math.atan2(s.vel.x,s.vel.z);
+
+    if(dist<1.75 && gameState.mode==='tag' && gameState.tagRole==='runner'){
+      s.stunTimer = 3.0;
+      s.vel.set(0,0,0);
+      takePlayerDamage(1, '鬼 AI');
+      pushToast('💥 鬼に触れてダメージ！ 鬼は3秒間スタン中！','text-emerald-300');
+    }
+  });
+}
+
+function updateAIRunners(dt){
+  runnersList.forEach(r=>{
+    if(r.caught)return;
+    r.wanderTimer-=dt;if(r.wanderTimer<=0){r.wanderTimer=2;r.targetRotY=Math.random()*Math.PI*2;}
+    r.vel.x+=(Math.sin(r.targetRotY)*r.speed*0.6-r.vel.x)*Math.min(1,dt*3);r.vel.z+=(Math.cos(r.targetRotY)*r.speed*0.6-r.vel.z)*Math.min(1,dt*3);
+    r.pos.x+=r.vel.x*dt;r.pos.z+=r.vel.z*dt;
+    const hitW = resolveHorizontalCollisions(r.pos,r.radius,0);
+    if(hitW) r.targetRotY += Math.PI*0.75;
+    r.mesh.position.copy(r.pos);r.mesh.rotation.y=Math.atan2(r.vel.x,r.vel.z);
+
+    if(gameState.mode==='tag' && gameState.tagRole==='seeker' && gameState.seekerStunTimer<=0 && player.pos.distanceTo(r.pos)<1.8){
+      r.hp = (r.hp || 3) - 1;
+      if(r.hp <= 0){ r.caught=true; worldGroup.remove(r.mesh); }
+      triggerSeekerTagHitAndStun(`Runner_${r.id+1}`, null);
+    }
+  });
+}
+
+function lerpAngle(a,b,t){let d=b-a;while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)d+=Math.PI*2;return a+d*Math.min(1,t);}
+
+function spawn3DBurst(x,y,z,color,count=12){
+  for(let i=0;i<count;i++){
+    const s=new THREE.Mesh(new THREE.SphereGeometry(0.08,6,6),new THREE.MeshBasicMaterial({color,transparent:true,opacity:1}));
+    s.position.set(x,y,z);worldGroup.add(s);
+    const a=Math.random()*Math.PI*2,sp=3+Math.random()*4;
+    fxList.push({mesh:s,life:0.5,maxLife:0.5,type:'particle',vx:Math.cos(a)*sp,vy:3+Math.random()*3,vz:Math.sin(a)*sp});
+  }
+}
+
+function update3DFX(dt){
+  for(let i=fxList.length-1;i>=0;i--){
+    const f=fxList[i];f.life-=dt;
+    if(f.life<=0){worldGroup.remove(f.mesh);if(f.mesh.material.map)f.mesh.material.map.dispose();f.mesh.material.dispose();fxList.splice(i,1);continue;}
+    const t=f.life/f.maxLife;
+    if(f.type==='particle'){f.mesh.position.x+=f.vx*dt;f.mesh.position.y+=f.vy*dt;f.mesh.position.z+=f.vz*dt;f.vy-=18*dt;f.mesh.material.opacity=t;}
+    else if(f.type==='sprite'){f.mesh.position.y+=f.vy*dt;f.mesh.material.opacity=t;}
+    else if(f.type==='beam'){f.mesh.material.opacity=t*0.9;}
+  }
+}
+
+// ==========================================
+// TPSカメラ・HUD・入力・終了処理
+// ==========================================
+function updateTPSCamera(dt){
+  camCtrl.dist+=(camCtrl.targetDist-camCtrl.dist)*Math.min(1,dt*10);
+  const focus=new THREE.Vector3(player.pos.x,player.pos.y+Math.max(1.0,player.height*0.75),player.pos.z);
+  const hDist=camCtrl.dist*Math.cos(camCtrl.pitch),vDist=camCtrl.dist*Math.sin(camCtrl.pitch);
+  const desired=new THREE.Vector3(focus.x+Math.sin(camCtrl.yaw)*hDist,focus.y+vDist,focus.z+Math.cos(camCtrl.yaw)*hDist);
+  const lim=ARENA_HALF-0.8;
+  desired.x=Math.max(-lim,Math.min(lim,desired.x));
+  desired.z=Math.max(-lim,Math.min(lim,desired.z));
+  desired.y=Math.max(0.6,desired.y);
+  camera.position.lerp(desired,Math.min(1,dt*16));
+  camera.lookAt(focus);
+}
+
+function updateHUD(){
+  const rem = Math.max(0, gameState.timer);
+  const min = Math.floor(rem / 60);
+  const sec = (rem % 60).toFixed(1).padStart(4, '0');
+  document.getElementById('hud-timer').textContent=`${min}:${sec}`;
+  document.getElementById('hud-score').textContent=Math.floor(gameState.score).toLocaleString();
+
+  if(gameState.mode==='fps'){
+    document.getElementById('hud-blue-score').textContent=gameState.fps.blueScore;
+    document.getElementById('hud-red-score').textContent=gameState.fps.redScore;
+    document.getElementById('hud-phase-text').textContent = gameState.fps.respawnTimer>0 ? `リスポーン待機 (${gameState.fps.respawnTimer.toFixed(1)}s)` : 'オンラインFPS対戦中';
+  } else if(gameState.mode==='tag'){
+    if(gameState.tagRole==='seeker' && gameState.seekerStunTimer>0){
+      document.getElementById('hud-phase-text').textContent=`⚡ 鬼スタン中 (${gameState.seekerStunTimer.toFixed(1)}s)`;
+    } else {
+      document.getElementById('hud-phase-text').textContent='鬼ごっこ進行中（2分勝負）';
+    }
+  } else if(gameState.mode==='prophunt'){
+    const totalDur = getDurationForMode('prophunt');
+    const elapsed = computeElapsedSeconds(APP.latestMatch) || (totalDur - gameState.timer);
+    if(elapsed < HIDE_PHASE_SEC){
+      document.getElementById('hud-phase-text').textContent=`🪴 隠れタイム残り ${Math.ceil(HIDE_PHASE_SEC - elapsed)}秒`;
+    } else {
+      document.getElementById('hud-phase-text').textContent='🔫 鬼捜索フェーズ進行中';
+    }
+  }
+
+  const ratio=player.skillCooldown>0?player.skillCooldown/player.skillMaxCooldown:0;
+  document.getElementById('skill-cooldown-overlay').style.transform=`scaleY(${ratio})`;
+}
+
+function updateHeartsHUD(){
+  document.getElementById('hud-hearts').textContent='❤️'.repeat(Math.max(0,gameState.hp))+'🖤'.repeat(Math.max(0,gameState.maxHp-gameState.hp));
+}
+function updateDisguiseHUD(){
+  document.getElementById('hud-disguise-icon').textContent=player.disguise?player.disguise.icon:'🏃';
+  document.getElementById('hud-disguise-name').textContent=player.disguise?player.disguise.name:'人間';
+}
+function updateLockHUD(){
+  document.getElementById('lock-icon').textContent=player.locked?'🔒':'🔓';
+  document.getElementById('lock-label').textContent=player.locked?'固定中':'角度固定';
+}
+
+let bannerTimeout=null;
+function showBanner(title,sub){
+  document.getElementById('banner-title').textContent=title;document.getElementById('banner-sub').textContent=sub;
+  const el=document.getElementById('center-banner');el.classList.remove('opacity-0','scale-90');el.classList.add('opacity-100','scale-100');
+  if(bannerTimeout)clearTimeout(bannerTimeout);
+  bannerTimeout=setTimeout(()=>{el.classList.remove('opacity-100','scale-100');el.classList.add('opacity-0','scale-90');},3400);
+}
+function pushToast(text,colorClass='text-white'){
+  const feed=document.getElementById('toast-feed'),item=document.createElement('div');
+  item.className=`px-3 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-xs font-black shadow-lg ${colorClass}`;
+  item.textContent=text;feed.appendChild(item);setTimeout(()=>item.remove(),2600);
+}
+
+function endGame(isWin,manualQuit=false){
+  if(gameState.screen!=='playing')return;
+  sound.stopBGM();stopActiveMatchSync();
+  gameState.isFireHeld = false;
+  gameState.isInteractHeld = false;
+  resetChestHoldUI();
+  setAimingState(false);
+
+  if(gameState.bagOpen){
+    gameState.bagOpen = false;
+    document.getElementById('inventory-overlay').classList.remove('show');
+  }
+  gameState.paused=false;pauseOverlay.classList.remove('show');
+  document.getElementById('btn-pause').classList.add('hidden');leavePlayingMode();
+
+  document.getElementById('hud-top').classList.add('hidden');
+  document.getElementById('controls-overlay').classList.add('hidden');
+  document.getElementById('fps-crosshair').style.display='none';
+  document.getElementById('fps-hud').style.display='none';
+  document.getElementById('fps-hotbar').classList.add('hidden');
+  document.getElementById('reticle-container').classList.add('hidden');
+
+  if(manualQuit){
+    gameState.screen='title';
+    document.getElementById('title-screen').classList.remove('hidden');
+    document.getElementById('title-screen').classList.add('flex');
+    bindServerPresence();
+    refreshLobbyMatchUI();
+    return;
+  }
+
+  gameState.screen='result';if(isWin)sound.playWin();else sound.playLose();
+  document.getElementById('result-emoji').textContent=isWin?'🏆':'💥';
+  document.getElementById('result-title').textContent=gameState.mode==='fps'?(isWin?'TEAM VICTORY!':'TEAM DEFEAT'):(isWin?'VICTORY!':'GAME OVER');
+  document.getElementById('result-score').textContent=`${Math.floor(gameState.score).toLocaleString()} pt`;
+  document.getElementById('result-stats').innerHTML=gameState.mode==='fps'
+    ?`<div class="flex justify-between"><span>BLUE vs RED</span><span class="font-black text-sky-400">${gameState.fps.blueScore} - ${gameState.fps.redScore}</span></div><div class="flex justify-between"><span>撃破数 / デス数</span><span class="font-black text-amber-400">${gameState.stats.kills} / ${gameState.stats.deaths}</span></div>`
+    :`<div class="flex justify-between"><span>プレイヤー</span><span class="font-black text-emerald-400">${APP.profile?.username||'Player'}</span></div><div class="flex justify-between"><span>サーバー</span><span class="font-black text-amber-400">${APP.serverId}</span></div>`;
+  document.getElementById('result-screen').classList.remove('hidden');
+  bindServerPresence();
+}
+
+// ==========================================
+// キーボード・UIイベント
+// ==========================================
+window.addEventListener('keydown',(e)=>{
+  if(e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  keys[e.code]=true;
+  if(gameState.screen!=='playing'||gameState.paused)return;
+
+  if(e.code==='KeyB' || e.code==='Tab'){
+    if(gameState.mode==='fps'){
+      e.preventDefault();
+      if(gameState.bagOpen) closeBagModal();
+      else openBagModal();
+    }
+    return;
+  }
+  if(gameState.bagOpen) return;
+
+  if(e.code==='Digit1' && gameState.mode==='fps') selectHotbarSlot(0);
+  if(e.code==='Digit2' && gameState.mode==='fps') selectHotbarSlot(1);
+  if(e.code==='Digit3' && gameState.mode==='fps') selectHotbarSlot(2);
+  if(e.code==='Digit4' && gameState.mode==='fps') selectHotbarSlot(3);
+  if(e.code==='Digit5' && gameState.mode==='fps') selectHotbarSlot(4);
+
+  if(e.code==='KeyH' && gameState.mode==='fps') useSelectedHeal();
+  if(e.code==='KeyG' && gameState.mode==='fps') dropHotbarSlotItem(gameState.fps.selectedSlot);
+
+  if(e.code==='Space'){e.preventDefault();triggerJump();}
+  if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyR')triggerSkill();
+  if(e.code==='KeyE' && !e.repeat) triggerInteractPress();
+  if(e.code==='KeyF')triggerLock();
+  if(e.code==='KeyQ')triggerTaunt();
+});
+
+window.addEventListener('keyup',(e)=>{
+  keys[e.code]=false;
+  if(e.code==='KeyE'){
+    triggerInteractRelease();
+  }
+});
+
+// モバイルボタン
+const shootMobileBtn = document.getElementById('btn-shoot-mobile');
+shootMobileBtn.addEventListener('touchstart',(e)=>{e.preventDefault();gameState.isFireHeld=true;shootGun();});
+shootMobileBtn.addEventListener('touchend',(e)=>{e.preventDefault();gameState.isFireHeld=false;});
+shootMobileBtn.addEventListener('mousedown',()=>{gameState.isFireHeld=true;shootGun();});
+shootMobileBtn.addEventListener('mouseup',()=>{gameState.isFireHeld=false;});
+
+const adsMobileBtn = document.getElementById('btn-ads-mobile');
+adsMobileBtn.addEventListener('click',()=>setAimingState(!gameState.isAiming));
+
+const interactMobileBtn = document.getElementById('btn-interact-mobile');
+interactMobileBtn.addEventListener('touchstart',(e)=>{e.preventDefault();triggerInteractPress();});
+interactMobileBtn.addEventListener('touchend',(e)=>{e.preventDefault();triggerInteractRelease();});
+interactMobileBtn.addEventListener('mousedown',()=>triggerInteractPress());
+interactMobileBtn.addEventListener('mouseup',()=>triggerInteractRelease());
+
+document.getElementById('btn-use-heal').addEventListener('click',useSelectedHeal);
+document.getElementById('btn-drop-slot').addEventListener('click',()=>dropHotbarSlotItem(gameState.fps.selectedSlot));
+document.getElementById('btn-open-bag').addEventListener('click',openBagModal);
+document.getElementById('btn-close-bag').addEventListener('click',closeBagModal);
+
+document.getElementById('btn-jump').addEventListener('click',triggerJump);
+document.getElementById('btn-skill').addEventListener('click',triggerSkill);
+document.getElementById('btn-morph').addEventListener('click',triggerMorph);
+document.getElementById('btn-lock').addEventListener('click',triggerLock);
+document.getElementById('btn-taunt').addEventListener('click',triggerTaunt);
+document.getElementById('btn-sound').addEventListener('click',()=>{document.getElementById('btn-sound').textContent=sound.toggleMute()?'🔇':'🔊';});
+document.getElementById('btn-quit').addEventListener('click',()=>endGame(false,true));
+document.getElementById('btn-back-title').addEventListener('click',()=>{
+  document.getElementById('result-screen').classList.add('hidden');
+  document.getElementById('title-screen').classList.remove('hidden');
+  document.getElementById('title-screen').classList.add('flex');
+  gameState.screen='title';
+  refreshLobbyMatchUI();
+});
+document.getElementById('btn-replay').addEventListener('click',()=>startGame(gameState.mode, false));
+
+// タッチジョイスティック＆カメラ操作
+const jZone=document.getElementById('joystick-zone'),jKnob=document.getElementById('joystick-knob');
+jZone.addEventListener('touchstart',(e)=>{e.preventDefault();const t=e.changedTouches[0];joystick.active=true;joystick.touchId=t.identifier;updateJoy(t);},{passive:false});
+window.addEventListener('touchmove',(e)=>{for(let i=0;i<e.changedTouches.length;i++){const t=e.changedTouches[i];if(joystick.active&&t.identifier===joystick.touchId){e.preventDefault();updateJoy(t);}else if(camCtrl.touchId===t.identifier){const dx=t.clientX-camCtrl.lastX,dy=t.clientY-camCtrl.lastY;camCtrl.lastX=t.clientX;camCtrl.lastY=t.clientY;const sens=gameState.isAiming?0.52:1.0;if(canUseGun()||gameState.mode==='fps'){player.fpsYaw-=dx*0.005*sens;player.fpsPitch=Math.max(-1.35,Math.min(1.35,player.fpsPitch-dy*0.005*sens));}else{camCtrl.yaw-=dx*0.006;camCtrl.pitch=Math.max(-0.2,Math.min(1.3,camCtrl.pitch+dy*0.006));}}}},{passive:false});
+window.addEventListener('touchend',(e)=>{for(let i=0;i<e.changedTouches.length;i++){const t=e.changedTouches[i];if(joystick.active&&t.identifier===joystick.touchId){joystick.active=false;joystick.dx=0;joystick.dy=0;jKnob.style.transform='translate(0,0)';}else if(camCtrl.touchId===t.identifier)camCtrl.touchId=null;}});
+function updateJoy(t){const r=jZone.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=t.clientX-cx,dy=t.clientY-cy;const m=35,d=Math.hypot(dx,dy);if(d>m){dx=dx/d*m;dy=dy/d*m;}jKnob.style.transform=`translate(${dx}px,${dy}px)`;joystick.dx=dx/m;joystick.dy=dy/m;}
+container.addEventListener('touchstart',(e)=>{if(gameState.screen==='playing'&&!gameState.paused&&!gameState.bagOpen){const t=e.changedTouches[0];if(camCtrl.touchId===null){camCtrl.touchId=t.identifier;camCtrl.lastX=t.clientX;camCtrl.lastY=t.clientY;}}},{passive:true});
+
+// ロビータブ＆役割ボタン
+document.querySelectorAll('.mode-tab').forEach(tab=>tab.addEventListener('click',()=>{
+  document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.lobby-panel').forEach(p=>p.classList.remove('active'));
+  tab.classList.add('active');
+  document.querySelector(`.lobby-panel[data-panel="${tab.dataset.mode}"]`).classList.add('active');
+}));
+document.getElementById('tag-role-runner').addEventListener('click',()=>{
+  gameState.tagRole='runner';
+  document.getElementById('tag-role-runner').className='flex-1 py-1.5 rounded-lg text-xs font-black bg-sky-600 text-white';
+  document.getElementById('tag-role-seeker').className='flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400';
+});
+document.getElementById('tag-role-seeker').addEventListener('click',()=>{
+  gameState.tagRole='seeker';
+  document.getElementById('tag-role-seeker').className='flex-1 py-1.5 rounded-lg text-xs font-black bg-rose-600 text-white';
+  document.getElementById('tag-role-runner').className='flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400';
+});
+document.getElementById('ph-role-hider').addEventListener('click',()=>{
+  gameState.phRole='hider';
+  document.getElementById('ph-role-hider').className='flex-1 py-1.5 rounded-lg text-xs font-black bg-emerald-600 text-white';
+  document.getElementById('ph-role-seeker').className='flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400';
+});
+document.getElementById('ph-role-seeker').addEventListener('click',()=>{
+  gameState.phRole='seeker';
+  document.getElementById('ph-role-seeker').className='flex-1 py-1.5 rounded-lg text-xs font-black bg-rose-600 text-white';
+  document.getElementById('ph-role-hider').className='flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400';
+});
+
+document.getElementById('start-fps-btn').addEventListener('click',()=>startGame('fps', false));
+document.getElementById('start-tag-btn').addEventListener('click',()=>startGame('tag', false));
+document.getElementById('start-prophunt-btn').addEventListener('click',()=>startGame('prophunt', false));
+
+build3DWorld('fps');
+function animate(now){
+  requestAnimationFrame(animate);
+  const dt=Math.min((now-(gameState.lastTime||now))/1000,0.05);
+  gameState.lastTime=now;
+  if(gameState.screen==='playing')update(dt);
+  else{
+    const t=now*0.00022;
+    camera.position.set(Math.sin(t)*46,24,Math.cos(t)*46);
+    camera.lookAt(0,2,0);
+  }
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
 
         rp.mode=p.mode;
         rp.role=p.role;
