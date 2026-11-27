@@ -130,7 +130,7 @@
     </div>
     <div class="h-7 w-[1px] bg-slate-700"></div>
     <div class="text-center">
-      <div class="text-[10px] font-bold text-slate-400">個人スコア</div>
+      <div class="text-[10px] font-bold text-slate-400">個人スコア <span id="hud-next-lv-hint" class="text-[9px] text-amber-300">(次Lvまで5,000pt)</span></div>
       <div id="hud-score" class="text-xl sm:text-2xl font-black text-emerald-400 tabular-nums">0</div>
     </div>
     <div id="hud-hp-container" class="flex items-center gap-1 pl-2 border-l border-slate-700">
@@ -164,7 +164,10 @@
       <img id="hud-user-avatar" class="w-6 h-6 rounded-full border border-sky-400/50 hidden" alt="">
       <div>
         <div class="text-[10px] text-sky-400 font-bold leading-none">プレイヤー</div>
-        <div id="hud-user-name" class="text-xs font-black text-white leading-tight">ゲスト</div>
+        <div class="flex items-baseline gap-1 leading-tight">
+          <span id="hud-user-name" class="text-xs font-black text-white">ゲスト</span>
+          <span id="hud-user-level" class="text-[10px] font-black text-amber-300 bg-amber-500/20 border border-amber-400/40 px-1 rounded">Lv.1</span>
+        </div>
       </div>
     </div>
     <button id="btn-sound" type="button" class="game-btn bg-slate-800/90 hover:bg-slate-700 border border-slate-600 p-2.5 rounded-xl text-base">🔊</button>
@@ -336,7 +339,10 @@
         <img id="lobby-avatar" class="w-8 h-8 rounded-full border border-emerald-400/60 hidden" alt="">
         <div>
           <div id="lobby-sync-status" class="text-[10px] text-emerald-400 font-bold">● オンラインサーバー準備完了</div>
-          <div id="lobby-username" class="text-sm font-black text-white">-</div>
+          <div class="flex items-baseline gap-1.5">
+            <span id="lobby-username" class="text-sm font-black text-white">-</span>
+            <span id="lobby-level" class="text-[11px] font-black text-amber-300 bg-amber-500/20 border border-amber-400/40 px-1.5 py-0.2 rounded">Lv.1</span>
+          </div>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -362,7 +368,7 @@
 
     <div class="text-center mb-4">
       <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-xs font-bold text-amber-400 mb-2">
-        <span>⚡ ドロップ品1分間(60秒)保持・バックパックで枠交換・鬼に音声で聞こえる口笛</span>
+        <span>⚡ 1試合5,000pt達成ごとにレベルUP！名前の隣にレベル表示</span>
       </div>
       <h1 class="text-2xl sm:text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-amber-300 to-emerald-400 drop-shadow">3D 鬼ごっこ＆変身かくれんぼ＋FPS</h1>
     </div>
@@ -451,6 +457,10 @@
         <span class="text-slate-400 font-bold">個人スコア</span>
         <span id="result-score" class="text-2xl font-black text-amber-400">1,500 pt</span>
       </div>
+      <div class="flex justify-between items-center text-sm">
+        <span class="text-slate-400 font-bold">プレイヤーレベル</span>
+        <span id="result-level" class="text-lg font-black text-sky-300">Lv.1</span>
+      </div>
       <div class="h-[1px] bg-slate-800"></div>
       <div id="result-stats" class="text-xs text-slate-300 space-y-1.5 text-left"></div>
     </div>
@@ -517,6 +527,7 @@ const ARENA_HALF = 110;
 const VOID_ROOM_POS = { x: 0, y: 140, z: 320 };
 const CHEST_OPEN_DURATION = 1.0;
 const DROP_LIFETIME_SEC = 60.0; // 落ちたアイテムは1分間（60秒）消えない
+const POINTS_PER_LEVEL = 5000;  // 1試合で5000ポイント達成ごとにレベルが1上昇
 
 function getDurationForMode(mode){
   if(mode === 'tag') return TAG_MATCH_DURATION_SEC;
@@ -564,12 +575,18 @@ function loadSession(){
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return null;
     const p = JSON.parse(raw);
-    if(p && p.uid && p.username) return p;
+    if(p && p.uid && p.username){
+      if(typeof p.level !== 'number' || p.level < 1) p.level = 1;
+      return p;
+    }
   }catch(e){}
   return null;
 }
 function saveSession(profile){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(profile)); }catch(e){}
+  try{
+    if(profile && (typeof profile.level !== 'number' || profile.level < 1)) profile.level = 1;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+  }catch(e){}
 }
 function clearSession(){
   try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
@@ -579,7 +596,8 @@ const defaultGuestProfile = () => ({
   uid: 'guest_' + Math.random().toString(36).substring(2, 10),
   username: 'Player_' + Math.floor(100 + Math.random() * 900),
   email: 'ゲストオンライン',
-  photoURL: ''
+  photoURL: '',
+  level: 1
 });
 
 const APP = {
@@ -593,6 +611,17 @@ const APP = {
   latestPlayers: {},
   latestMatch: null
 };
+
+// レベルUI一括反映（ロビー・HUD・リザルト・プレゼンス）
+function updateLevelDisplays(){
+  const lv = Math.max(1, APP.profile?.level || 1);
+  const hudLv = document.getElementById('hud-user-level');
+  const lobbyLv = document.getElementById('lobby-level');
+  const resLv = document.getElementById('result-level');
+  if(hudLv) hudLv.textContent = `Lv.${lv}`;
+  if(lobbyLv) lobbyLv.textContent = `Lv.${lv}`;
+  if(resLv) resLv.textContent = `Lv.${lv}`;
+}
 
 // ==========================================
 // Sound Engine
@@ -643,6 +672,7 @@ class SoundEngine {
   playHeal(){this.playTone(523.25,'sine',0.12,0.2);setTimeout(()=>this.playTone(783.99,'sine',0.2,0.2),90);}
   playDrop(){this.playTone(420,'triangle',0.1,0.16,220);}
   playSwap(){this.playTone(580,'sine',0.07,0.16,780);}
+  playLevelUp(){[523.25,659.25,783.99,1046.5,1318.51].forEach((n,i)=>setTimeout(()=>this.playTone(n,'triangle',0.22,0.25),i*75));}
   playHit(){this.playTone(150,'sawtooth',0.35,0.32,48);}
   playStun(){this.playTone(220,'sawtooth',0.4,0.25,95);}
   playTeleport(){this.playTone(440,'sine',0.25,0.22,1200);}
@@ -873,7 +903,7 @@ function animateCharacter(charMesh,dt,moveSpeed,isGrounded){
 }
 
 // ==========================================
-// ロブロックス風 頭上ネームタグ
+// ロブロックス風 頭上ネームタグ（名前の隣にレベルの数字を小さく表示）
 // ==========================================
 function shouldShowNametagForRemote(remotePlayerData){
   if(!remotePlayerData) return false;
@@ -886,22 +916,23 @@ function shouldShowNametagForRemote(remotePlayerData){
   return true;
 }
 
-function createRobloxNametagSprite(username, team=null, hp=100, maxHp=100){
+function createRobloxNametagSprite(username, team=null, hp=100, maxHp=100, level=1){
   const canvas=document.createElement('canvas');
-  canvas.width=320;canvas.height=88;
+  canvas.width=360;canvas.height=88;
   const tex=new THREE.CanvasTexture(canvas);
   tex.minFilter=THREE.LinearFilter;
   const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
-  sprite.scale.set(2.5,0.68,1);
+  sprite.scale.set(2.8,0.68,1);
   sprite.userData.isNametag=true;sprite.userData.canvas=canvas;sprite.userData.tex=tex;
   sprite.userData.lastKey='';
-  updateRobloxNametag(sprite, username, team, hp, maxHp);
+  updateRobloxNametag(sprite, username, team, hp, maxHp, level);
   return sprite;
 }
 
-function updateRobloxNametag(sprite, username, team=null, hp=100, maxHp=100){
+function updateRobloxNametag(sprite, username, team=null, hp=100, maxHp=100, level=1){
   if(!sprite || !sprite.userData.canvas) return;
-  const key = `${username}|${team}|${hp}|${maxHp}`;
+  const safeLv = Math.max(1, level || 1);
+  const key = `${username}|${team}|${hp}|${maxHp}|${safeLv}`;
   if(sprite.userData.lastKey === key) return;
   sprite.userData.lastKey = key;
 
@@ -913,13 +944,39 @@ function updateRobloxNametag(sprite, username, team=null, hp=100, maxHp=100){
   if(team==='red'){ nameColor = '#fda4af'; prefix = '[RED] '; }
 
   const displayText = prefix + (username || 'Player');
-  c.font='900 28px "M PLUS Rounded 1c", sans-serif';
-  c.textAlign='center';c.textBaseline='middle';c.lineJoin='round';
-  c.lineWidth=6;c.strokeStyle='rgba(0, 0, 0, 0.9)';c.strokeText(displayText, 160, 30);
-  c.fillStyle=nameColor;c.fillText(displayText, 160, 30);
+  const lvText = `Lv.${safeLv}`;
+
+  c.font='900 26px "M PLUS Rounded 1c", sans-serif';
+  const nameWidth = c.measureText(displayText).width;
+  c.font='900 17px "M PLUS Rounded 1c", sans-serif';
+  const lvWidth = c.measureText(lvText).width;
+
+  const gap = 7;
+  const totalW = nameWidth + gap + lvWidth;
+  const startX = (canvas.width - totalW) / 2;
+
+  c.textAlign='left';
+  c.textBaseline='middle';
+  c.lineJoin='round';
+
+  // プレイヤー名描画
+  c.font='900 26px "M PLUS Rounded 1c", sans-serif';
+  c.lineWidth=6;
+  c.strokeStyle='rgba(0, 0, 0, 0.92)';
+  c.strokeText(displayText, startX, 30);
+  c.fillStyle=nameColor;
+  c.fillText(displayText, startX, 30);
+
+  // 名前の隣にレベルの数字を小さく描画
+  c.font='900 17px "M PLUS Rounded 1c", sans-serif';
+  c.lineWidth=4.5;
+  c.strokeStyle='rgba(0, 0, 0, 0.92)';
+  c.strokeText(lvText, startX + nameWidth + gap, 32);
+  c.fillStyle='#fbbf24';
+  c.fillText(lvText, startX + nameWidth + gap, 32);
 
   if(maxHp > 0 && team !== null){
-    const barW=140, barH=12, bx=(320-barW)/2, by=52;
+    const barW=140, barH=12, bx=(canvas.width-barW)/2, by=52;
     const ratio=Math.max(0, Math.min(1, hp/maxHp));
     c.fillStyle='rgba(15, 23, 42, 0.85)';
     roundRect(c, bx-2, by-2, barW+4, barH+4, 6);c.fill();
@@ -943,15 +1000,15 @@ function roundRect(ctx, x, y, w, h, r){
   ctx.closePath();
 }
 
-function attachNametag(mesh, text, team=null, hp=100, maxHp=100, yOffset=2.75, visible=true){
+function attachNametag(mesh, text, team=null, hp=100, maxHp=100, yOffset=2.75, visible=true, level=1){
   if(!mesh)return null;
   if(mesh.userData.nametag){
     mesh.userData.nametag.position.set(0, yOffset, 0);
     mesh.userData.nametag.visible = visible;
-    updateRobloxNametag(mesh.userData.nametag, text, team, hp, maxHp);
+    updateRobloxNametag(mesh.userData.nametag, text, team, hp, maxHp, level);
     return mesh.userData.nametag;
   }
-  const tag=createRobloxNametagSprite(text, team, hp, maxHp);
+  const tag=createRobloxNametagSprite(text, team, hp, maxHp, level);
   tag.position.set(0, yOffset, 0);
   tag.visible = visible;
   mesh.add(tag);mesh.userData.nametag=tag;
@@ -1038,11 +1095,11 @@ let remotePlayers = {};
 // ==========================================
 const gameState={
   screen:'auth',mode:'fps',tagRole:'runner',phRole:'hider',
-  timer:FPS_MATCH_DURATION_SEC,score:0,hp:3,maxHp:3,invulnTimer:0,lastTime:0,
+  timer:FPS_MATCH_DURATION_SEC,score:0,matchLevelUps:0,hp:3,maxHp:3,invulnTimer:0,lastTime:0,
   paused:false,
   bagOpen:false,
-  bagSelectedSlot:null, // クリック入替用の選択中スロット番号(0〜4)
-  bagDragSlot:null,     // ドラッグ中のスロット番号(0〜4)
+  bagSelectedSlot:null,
+  bagDragSlot:null,
   isFireHeld:false,
   isAiming:false,
   isInteractHeld:false,
@@ -1078,6 +1135,28 @@ const gameState={
     }
   }
 };
+
+// 1試合中のポイント加算＆5,000ポイント達成ごとのレベルアップ判定
+function addMatchPoints(pts){
+  if(!pts || pts <= 0) return;
+  gameState.score += pts;
+
+  // 1試合のスコアが 5000, 10000, 15000... を突破するたびにレベルが1上昇
+  const achievedTier = Math.floor(gameState.score / POINTS_PER_LEVEL);
+  if(achievedTier > gameState.matchLevelUps){
+    const diff = achievedTier - gameState.matchLevelUps;
+    gameState.matchLevelUps = achievedTier;
+    if(APP.profile){
+      APP.profile.level = Math.max(1, (APP.profile.level || 1) + diff);
+      saveSession(APP.profile);
+      updateLevelDisplays();
+      sound.playLevelUp();
+      pushToast(`🎉 5,000pt突破！ レベルアップ！ Lv.${APP.profile.level}`,'text-amber-300');
+      showBanner(`🆙 LEVEL UP! Lv.${APP.profile.level}`,`1試合で ${(achievedTier * POINTS_PER_LEVEL).toLocaleString()}pt 達成！レベルが ${APP.profile.level} に上がった！`);
+      publishPlayerStateNow();
+    }
+  }
+}
 
 function updateKeybindGuideUI(){
   const guideEl = document.getElementById('hud-keybind-guide');
@@ -1161,14 +1240,12 @@ function addItemToHotbar(kind, itemId, magOverride=null){
   return true;
 }
 
-// バックパック内の2つのスロット(idxA, idxB)を交換する
 function swapHotbarSlots(idxA, idxB){
   if(idxA === idxB || idxA < 0 || idxA > 4 || idxB < 0 || idxB > 4) return;
   const temp = gameState.fps.slots[idxA];
   gameState.fps.slots[idxA] = gameState.fps.slots[idxB];
   gameState.fps.slots[idxB] = temp;
 
-  // 現在手に持っている選択スロットも追従させる
   if(gameState.fps.selectedSlot === idxA) gameState.fps.selectedSlot = idxB;
   else if(gameState.fps.selectedSlot === idxB) gameState.fps.selectedSlot = idxA;
 
@@ -1412,7 +1489,6 @@ function renderBagUI(){
       });
     }
 
-    // クリックでの枠選択＆入れ替え操作（モバイル・PC両対応）
     card.addEventListener('click', ()=>{
       if(gameState.bagSelectedSlot === null){
         gameState.bagSelectedSlot = i;
@@ -1425,7 +1501,6 @@ function renderBagUI(){
       }
     });
 
-    // HTML5 ドラッグ＆ドロップでの入れ替え操作
     card.addEventListener('dragstart', (e)=>{
       gameState.bagDragSlot = i;
       if(e.dataTransfer){
@@ -1829,7 +1904,6 @@ function updatePickupsAndProximity(dt){
     }
   });
 
-  // 高精度モノトニックタイマー（performance.now）で60秒（1分間）しっかり維持し、1分後に消滅させる
   for(let i=droppedWorldItems.length-1; i>=0; i--){
     const d = droppedWorldItems[i];
     d.age = Math.max(0, (nowPerf - d.spawnedAtMs) / 1000);
@@ -2130,11 +2204,16 @@ function clearAuthError(){authError.textContent='';authError.classList.add('hidd
 
 function enterLobbyWithProfile(profile){
   const safeProfile = profile && profile.uid && profile.username ? profile : defaultGuestProfile();
+  if(typeof safeProfile.level !== 'number' || safeProfile.level < 1){
+    safeProfile.level = APP.profile?.level || 1;
+  }
   APP.profile = safeProfile;
   saveSession(safeProfile);
 
   document.getElementById('hud-user-name').textContent=safeProfile.username;
   document.getElementById('lobby-username').textContent=safeProfile.username;
+  updateLevelDisplays();
+
   if(safeProfile.photoURL){
     document.getElementById('hud-user-avatar').src=safeProfile.photoURL;document.getElementById('hud-user-avatar').classList.remove('hidden');
     document.getElementById('lobby-avatar').src=safeProfile.photoURL;document.getElementById('lobby-avatar').classList.remove('hidden');
@@ -2221,10 +2300,12 @@ document.getElementById('btn-save-name').addEventListener('click',()=>{
   if(!name) name = 'Player_' + Math.floor(100 + Math.random()*900);
   if(name.length>14) name = name.slice(0,14);
   const uid = APP.user?.uid || APP.profile?.uid || ('guest_' + Math.random().toString(36).substring(2,10));
+  const currentLevel = APP.profile?.level || 1;
   enterLobbyWithProfile({
     uid, username: name,
     email: APP.user?.email || APP.profile?.email || 'ゲスト',
-    photoURL: APP.user?.photoURL || APP.profile?.photoURL || ''
+    photoURL: APP.user?.photoURL || APP.profile?.photoURL || '',
+    level: currentLevel
   });
 });
 
@@ -2330,7 +2411,7 @@ function refreshLobbyMatchUI(){
   document.getElementById('lobby-online-badge').textContent=`🌐 ${APP.serverId} (${count}人接続中)`;
   document.getElementById('hud-role-sub').textContent=`サーバー: ${APP.serverId}`;
 
-  const names = online.map(p => `${p.username}${p.mode && p.mode!=='lobby' ? `(${p.mode.toUpperCase()})` : ''}`).join(' / ');
+  const names = online.map(p => `${p.username} Lv.${p.level || 1}${p.mode && p.mode!=='lobby' ? `(${p.mode.toUpperCase()})` : ''}`).join(' / ');
   document.getElementById('live-players-list').textContent = names ? `同サーバー参加者: ${names}` : 'いつでも即プレイ可能';
 
   const m = APP.latestMatch;
@@ -2652,19 +2733,19 @@ function syncBotsWithHumanPriority(){
     }
     const enemyTeam = gameState.fps.team==='blue'?'red':'blue';
     const presets = [
-      {name:'Bot_Alpha', team:enemyTeam},
-      {name:'Bot_Bravo', team:enemyTeam}
+      {name:'Bot_Alpha', team:enemyTeam, level:1},
+      {name:'Bot_Bravo', team:enemyTeam, level:1}
     ];
     while(fpsBots.length < desiredBots){
       const idx = fpsBots.length;
-      const cfg = presets[idx] || {name:`Bot_${idx+1}`, team:enemyTeam};
+      const cfg = presets[idx] || {name:`Bot_${idx+1}`, team:enemyTeam, level:1};
       const spawnZ = cfg.team==='blue'?76:-76;
       const spawnX = (idx===0?-12:12);
       const mesh=createCharacterMesh(0x38bdf8,false,cfg.team);
       mesh.position.set(spawnX,0,spawnZ);worldGroup.add(mesh);
-      attachNametag(mesh, cfg.name, cfg.team, 100, 100, 2.75, false);
+      attachNametag(mesh, cfg.name, cfg.team, 100, 100, 2.75, false, cfg.level);
       fpsBots.push({
-        id:'bot_'+idx, name:cfg.name, team:cfg.team, mesh,
+        id:'bot_'+idx, name:cfg.name, team:cfg.team, level:cfg.level, mesh,
         pos:new THREE.Vector3(spawnX,0,spawnZ), vel:new THREE.Vector3(),
         rotY:cfg.team==='blue'?Math.PI:0, hp:100, maxHp:100,
         deadTimer:0, shootTimer:1.8+Math.random(), moveTimer:0,
@@ -2747,6 +2828,7 @@ function startGame(mode, isLateJoin=false){
       document.getElementById('hud-user-name').textContent = g.username;
       document.getElementById('lobby-username').textContent = g.username;
     }
+    updateLevelDisplays();
 
     sound.init();
     gameState.mode=mode;gameState.screen='playing';gameState.paused=false;gameState.bagOpen=false;
@@ -2759,7 +2841,9 @@ function startGame(mode, isLateJoin=false){
     setAimingState(false);
 
     document.getElementById('inventory-overlay').classList.remove('show');
-    gameState.score=0;gameState.hp=3;gameState.invulnTimer=0;
+    gameState.score=0;
+    gameState.matchLevelUps=0;
+    gameState.hp=3;gameState.invulnTimer=0;
     gameState.seekerStunTimer=0;
     gameState.chestSpawnTimer=7.0;
     gameState.ammoCrateSpawnTimer=10.0;
@@ -2863,7 +2947,7 @@ function startGame(mode, isLateJoin=false){
       updateFPSHUD();
       showBanner(
         activeMatch ? '⚡ 進行中の5分マッチに途中参加！' : (isBlue?'🔵 青チームに自動配属！':'🔴 赤チームに自動配属！'),
-        '落ちているアイテムは1分間(60秒)保持！[B]バッグで1〜5マスの場所交換が可能！'
+        '1試合5,000pt達成ごとにレベルUP！落ちているアイテムは1分間(60秒)保持！'
       );
     } else if(mode==='tag'){
       modeBadge.textContent='3D 鬼ごっこ(2分)';modeBadge.className='px-2.5 py-0.5 rounded-lg text-xs font-black bg-rose-500 text-white';
@@ -2982,12 +3066,12 @@ function createWeaponMesh(team='blue', accentHex=0x38bdf8){
 
 function createAISeeker(x,z,idx){
   const mesh=createCharacterMesh(0xe11d48,true);mesh.position.set(x,0,z);worldGroup.add(mesh);
-  attachNametag(mesh,`鬼 AI #${idx+1}`,null,0,0,2.75,true);
+  attachNametag(mesh,`鬼 AI #${idx+1}`,null,0,0,2.75,true,1);
   return {id:idx,mesh,pos:new THREE.Vector3(x,0,z),vel:new THREE.Vector3(),rotY:0,radius:0.52,baseSpeed:7.8,targetPos:new THREE.Vector3(x,0,z),patrolTimer:0,stunTimer:0,moveSpeed:0};
 }
 function createAIRunner(x,z,idx){
   const mesh=createCharacterMesh(0x38bdf8,false);mesh.position.set(x,0,z);worldGroup.add(mesh);
-  attachNametag(mesh,`Runner_${idx+1}`,null,0,0,2.75,true);
+  attachNametag(mesh,`Runner_${idx+1}`,null,0,0,2.75,true,1);
   return {id:idx,mesh,pos:new THREE.Vector3(x,0,z),vel:new THREE.Vector3(),rotY:0,radius:0.46,speed:8.2,wanderTimer:0,targetRotY:0,caught:false,hp:3,moveSpeed:0};
 }
 
@@ -3001,12 +3085,14 @@ function triggerMorph(){
     player.locked=true;
     player.lockedRotY=player.targetedProp.rotY;
     player.rotY=player.targetedProp.rotY;
-    gameState.stats.morphCount++;gameState.score+=60;sound.playMorph();
+    gameState.stats.morphCount++;
+    addMatchPoints(60);
+    sound.playMorph();
     rebuildPlayerMesh(false);
     player.mesh.rotation.y = player.lockedRotY;
     updateLockHUD();
     spawn3DBurst(player.pos.x,player.pos.y+0.7,player.pos.z,0x34d399,12);
-    pushToast(`✨ 「${player.disguise.name}」に変身（[Q]固定ON）！`,'text-emerald-300');updateDisguiseHUD();
+    pushToast(`✨ 「${player.disguise.name}」に変身（[Q]固定ON）！ +60pt`,'text-emerald-300');updateDisguiseHUD();
     publishPlayerStateNow();
   } else if(player.disguise){
     player.disguise=null;player.locked=false;sound.playMorph();rebuildPlayerMesh(false);updateDisguiseHUD();updateLockHUD();
@@ -3076,7 +3162,7 @@ function triggerTaunt(){
   if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen||gameState.mode!=='prophunt'||player.tauntCooldown>0)return;
   player.tauntCooldown=5.0;
   gameState.stats.tauntCount++;
-  gameState.score+=250;
+  addMatchPoints(250);
   sound.playTaunt(1.0);
   sendTauntToRemote(player.pos.x, player.pos.y, player.pos.z);
   pushToast('🎶 口笛を吹いた！ +250pt','text-amber-300');
@@ -3245,7 +3331,7 @@ function shootGun(){
       headshot ? '#facc15' : '#fb7185');
     sendHitEventToRemote(target.uid, dmg, headshot);
     if(gameState.mode === 'prophunt'){
-      gameState.score += 200;
+      addMatchPoints(200);
       gameState.stats.tagsMade++;
       pushToast(`🎯 変身中の相手 (${target.username}) に命中！ +200pt`, 'text-amber-300');
     }
@@ -3373,12 +3459,15 @@ function damageFPSBot(bot,dmg,isHeadshot){
 }
 
 function onPlayerGotKill(victimName,isHeadshot){
-  gameState.stats.kills++;gameState.score+=isHeadshot?150:100;sound.playKill();
+  const pts = isHeadshot ? 150 : 100;
+  gameState.stats.kills++;
+  addMatchPoints(pts);
+  sound.playKill();
   if(gameState.mode==='fps'){
     if(gameState.fps.team==='blue')gameState.fps.blueScore++;else gameState.fps.redScore++;
     updateMatchScoresInRTDB();
   }
-  pushToast(`⚔️ ${victimName} を撃破！（ドロップ1分間保持・[E]回収可） (+${isHeadshot?150:100}pt)`,'text-amber-300');
+  pushToast(`⚔️ ${victimName} を撃破！（ドロップ1分間保持・[E]回収可） (+${pts}pt)`,'text-amber-300');
 }
 
 function takePlayerDamage(dmg,attackerName='鬼・敵プレイヤー'){
@@ -3615,6 +3704,7 @@ function bindServerPresence(){
       FB.rtSet(presenceRef,{
         uid:myUid,
         username:APP.profile.username,
+        level:APP.profile.level || 1,
         mode:gameState.screen==='playing'?gameState.mode:'lobby',
         team:gameState.mode==='fps'?gameState.fps.team:null,
         updatedAt:Date.now()
@@ -3697,6 +3787,7 @@ function publishPlayerStateNow(){
       ry:+syncedRotY.toFixed(3),
       locked: Boolean(player.locked),
       username:APP.profile.username,
+      level:APP.profile.level || 1,
       disguise:player.disguise?.id ?? null,
       mode:gameState.mode,
       role:roleVal,
@@ -3754,6 +3845,7 @@ function startMatchAndPlayerSync(createNewMatch=true){
         const isRemoteSeeker = (p.mode==='tag' && p.role==='seeker') || (p.mode==='prophunt' && p.role==='seeker');
         const nextDisguise = (p.mode==='prophunt' && p.disguise && PROP_DEFS[p.disguise]) ? p.disguise : null;
         const showTag = shouldShowNametagForRemote(p);
+        const remoteLv = p.level || 1;
 
         if(!rp || rp.team!==p.team || rp.disguise!==nextDisguise || rp.isSeeker!==isRemoteSeeker){
           if(rp?.mesh)worldGroup.remove(rp.mesh);
@@ -3767,17 +3859,17 @@ function startMatchAndPlayerSync(createNewMatch=true){
           mesh.position.set(p.x,p.y,p.z);
           if(typeof p.ry === 'number') mesh.rotation.y = p.ry;
           worldGroup.add(mesh);
-          attachNametag(mesh,p.username||'Player',p.team||null,p.hp??100,p.mode==='fps'?100:0,tagY,showTag);
+          attachNametag(mesh,p.username||'Player',p.team||null,p.hp??100,p.mode==='fps'?100:0,tagY,showTag,remoteLv);
           rp={
             mesh,uid,targetPos:new THREE.Vector3(p.x,p.y,p.z),
             targetRotY:typeof p.ry === 'number' ? p.ry : 0,
-            team:p.team,hp:p.hp??100,username:p.username,mode:p.mode,
+            team:p.team,hp:p.hp??100,username:p.username,level:remoteLv,mode:p.mode,
             role:p.role,disguise:nextDisguise,isSeeker:isRemoteSeeker
           };
           remotePlayers[uid]=rp;
           if(!rp._announced){
             rp._announced=true;
-            pushToast(`🌐 ${p.username||'Player'} が参加しました！`,'text-sky-300');
+            pushToast(`🌐 ${p.username||'Player'} (Lv.${remoteLv}) が参加しました！`,'text-sky-300');
           }
         }
 
@@ -3788,11 +3880,12 @@ function startMatchAndPlayerSync(createNewMatch=true){
         if(typeof p.ry === 'number') rp.targetRotY = p.ry;
         rp.hp=p.hp??100;
         rp.username=p.username||'Player';
+        rp.level=remoteLv;
         rp.mesh.visible=(p.mode==='fps' ? (rp.hp>0) : true);
         if(rp.mesh.userData.nametag){
           rp.mesh.userData.nametag.visible = showTag;
           if(showTag){
-            updateRobloxNametag(rp.mesh.userData.nametag,rp.username,rp.team,rp.hp,p.mode==='fps'?100:0);
+            updateRobloxNametag(rp.mesh.userData.nametag,rp.username,rp.team,rp.hp,p.mode==='fps'?100:0,remoteLv);
           }
         }
       });
@@ -3807,7 +3900,6 @@ function startMatchAndPlayerSync(createNewMatch=true){
         const dropsMap = snap.val() || {};
         for(let i = droppedWorldItems.length - 1; i >= 0; i--){
           const d = droppedWorldItems[i];
-          // 自分がドロップしたアイテムで、まだFirebaseに書き込み反映中の10秒間は削除同期をスキップする
           if(d.isLocalOwner && d.age < 10.0) continue;
           if(!dropsMap[d.dropId]){
             worldGroup.remove(d.mesh);
@@ -3822,7 +3914,6 @@ function startMatchAndPlayerSync(createNewMatch=true){
             return;
           }
           const elapsedSec = Math.max(0, (Date.now() - itemTs) / 1000);
-          // サーバー時計ズレを考慮し、経過時間が60秒を超えている場合のみ削除する（ドロップ直後の負の値や微小ズレでは絶対に消さない）
           if(elapsedSec >= DROP_LIFETIME_SEC){
             FB.rtRemove(FB.rtRef(FB.rtdb, `servers/${APP.serverId}/drops/${dData.dropId}`)).catch(()=>{});
             return;
@@ -3864,259 +3955,139 @@ function startMatchAndPlayerSync(createNewMatch=true){
       const shotsRef=FB.rtRef(FB.rtdb,`servers/${APP.serverId}/shots`);
       const joinedAt = Date.now();
       unsubscribeShots=FB.onChildAdded(shotsRef,(snap)=>{
-        const sh=snap.val();
-        if(!sh || sh.fromUid===myUid || (sh.ts||0) < joinedAt - 1000) return;
-        if(sh.start && sh.end && gameState.screen==='playing'){
-          spawnVisibleBullet(sh.start, sh.end, sh.color || 0x38bdf8, 150, true);
-        }
-        if(Date.now() - (sh.ts||0) > 4000) FB.rtRemove(snap.ref).catch(()=>{});
+        const s=snap.val();
+        if(!s||s.fromUid===myUid||(s.ts||0)<joinedAt-1000)return;
+        if(gameState.screen==='playing')spawnVisibleBullet(s.start,s.end,s.color||0xf43f5e,165,true);
+        if(Date.now()-(s.ts||0)>3000)FB.rtRemove(snap.ref).catch(()=>{});
       }, ()=>{});
     }
-  } catch(e){
-    console.warn('startMatchAndPlayerSync fallback:', e);
-  }
+  }catch(e){}
 }
 
-function sendShotBeamToRemote(startPos, endPos, color){
+function sendHitEventToRemote(targetUid,dmg,headshot){
   if(!window.FB||!APP.ready||!APP.profile)return;
   try{
-    window.FB.rtPush(window.FB.rtRef(window.FB.rtdb,`servers/${APP.serverId}/shots`),{
-      fromUid:APP.profile.uid,
-      start:{x:+startPos.x.toFixed(2),y:+startPos.y.toFixed(2),z:+startPos.z.toFixed(2)},
-      end:{x:+endPos.x.toFixed(2),y:+endPos.y.toFixed(2),z:+endPos.z.toFixed(2)},
-      color,
-      ts:Date.now()
+    window.FB.rtPush(window.FB.rtRef(window.FB.rtdb,`servers/${APP.serverId}/hits/${targetUid}`),{
+      fromUid:APP.profile.uid,fromName:APP.profile.username,dmg,headshot,ts:Date.now()
     }).catch(()=>{});
   }catch(e){}
 }
 
-function sendHitEventToRemote(targetUid,dmg,isHeadshot=false){
+function sendShotBeamToRemote(start,end,color){
   if(!window.FB||!APP.ready||!APP.profile)return;
   try{
-    window.FB.rtPush(window.FB.rtRef(window.FB.rtdb,`servers/${APP.serverId}/hits/${targetUid}`),{
-      fromUid:APP.profile.uid, fromName:APP.profile.username, dmg, isHeadshot, ts:Date.now()
+    window.FB.rtPush(window.FB.rtRef(window.FB.rtdb,`servers/${APP.serverId}/shots`),{
+      fromUid:APP.profile.uid,
+      start:{x:+start.x.toFixed(1),y:+start.y.toFixed(1),z:+start.z.toFixed(1)},
+      end:{x:+end.x.toFixed(1),y:+end.y.toFixed(1),z:+end.z.toFixed(1)},
+      color,ts:Date.now()
     }).catch(()=>{});
-    const rp=remotePlayers[targetUid];
-    if(rp && gameState.mode==='fps' && (rp.hp-dmg)<=0)onPlayerGotKill(rp.username,isHeadshot);
   }catch(e){}
 }
 
 function stopActiveMatchSync(){
   if(publishTimer){clearInterval(publishTimer);publishTimer=null;}
   if(matchHostTimer){clearInterval(matchHostTimer);matchHostTimer=null;}
-  if(unsubscribeRoom){try{unsubscribeRoom();}catch(e){}unsubscribeRoom=null;}
-  if(unsubscribeDrops){try{unsubscribeDrops();}catch(e){}unsubscribeDrops=null;}
-  if(unsubscribeTaunts){try{unsubscribeTaunts();}catch(e){}unsubscribeTaunts=null;}
-  if(unsubscribeHits){try{unsubscribeHits();}catch(e){}unsubscribeHits=null;}
-  if(unsubscribeShots){try{unsubscribeShots();}catch(e){}unsubscribeShots=null;}
-  if(APP.profile?.uid&&window.FB&&APP.ready){
+  if(unsubscribeRoom){unsubscribeRoom();unsubscribeRoom=null;}
+  if(unsubscribeHits){unsubscribeHits();unsubscribeHits=null;}
+  if(unsubscribeShots){unsubscribeShots();unsubscribeShots=null;}
+  if(unsubscribeTaunts){unsubscribeTaunts();unsubscribeTaunts=null;}
+  if(unsubscribeDrops){unsubscribeDrops();unsubscribeDrops=null;}
+  if(window.FB&&APP.ready&&APP.profile?.uid){
     try{
       window.FB.rtRemove(window.FB.rtRef(window.FB.rtdb,`servers/${APP.serverId}/players/${APP.profile.uid}`)).catch(()=>{});
     }catch(e){}
   }
 }
 
-function updateRemotePlayers(dt){
-  Object.values(remotePlayers).forEach(rp=>{
-    if(!rp.mesh)return;
-    const px=rp.mesh.position.x,pz=rp.mesh.position.z;
-    rp.mesh.position.lerp(rp.targetPos,Math.min(1,dt*12));
-    const sp=Math.hypot(rp.mesh.position.x-px,rp.mesh.position.z-pz)/Math.max(0.001,dt);
-
-    if(rp.disguise){
-      rp.mesh.rotation.y = lerpAngle(rp.mesh.rotation.y, rp.targetRotY ?? 0, dt*16);
-    } else if(typeof rp.targetRotY === 'number'){
-      const desiredRot = sp > 0.2 ? Math.atan2(rp.mesh.position.x-px,rp.mesh.position.z-pz) : rp.targetRotY;
-      rp.mesh.rotation.y = lerpAngle(rp.mesh.rotation.y, desiredRot, dt*12);
-    }
-
-    if(rp.mesh.userData.joints)animateCharacter(rp.mesh,dt,sp,true);
-
-    if(gameState.mode==='tag' && gameState.tagRole==='seeker' && gameState.seekerStunTimer<=0){
-      if(rp.role!=='seeker' && player.pos.distanceTo(rp.mesh.position) < 1.85){
-        triggerSeekerTagHitAndStun(rp.username || '逃走者', rp.uid);
-      }
-    }
-  });
-}
-
-function triggerSeekerTagHitAndStun(targetName, targetUid=null){
-  gameState.seekerStunTimer = 3.0;
-  gameState.stats.tagsMade++;
-  gameState.score += 250;
-  sound.playStun();
-  pushToast(`💥 ${targetName} に接触ダメージ！ 鬼は3秒間スタン！`,'text-amber-300');
-  showBanner('⚡ 接触ヒット！3秒間スタン！','逃走者にダメージを与えた！反動で3秒間動けない！');
-  if(targetUid){
-    sendHitEventToRemote(targetUid, 35, false);
+window.addEventListener('beforeunload',()=>{
+  if(window.FB&&APP.ready&&APP.profile?.uid){
+    try{
+      window.FB.rtRemove(window.FB.rtRef(window.FB.rtdb,`servers/${APP.serverId}/players/${APP.profile.uid}`)).catch(()=>{});
+      window.FB.rtRemove(window.FB.rtRef(window.FB.rtdb,`servers/${APP.serverId}/presence/${APP.profile.uid}`)).catch(()=>{});
+    }catch(e){}
   }
-}
+});
 
 // ==========================================
-// 3D エフェクト＆HUD更新
+// メインフレーム更新ループ
 // ==========================================
-function spawn3DBurst(x,y,z,color,count=10){
-  const geo=getSharedGeo('burst_g',()=>new THREE.BoxGeometry(0.18,0.18,0.18));
-  const mat=getSharedMat(`burst_${color}`,()=>new THREE.MeshBasicMaterial({color}));
-  for(let i=0;i<count;i++){
-    const m=new THREE.Mesh(geo,mat);
-    m.position.set(x,y,z);worldGroup.add(m);
-    const a=Math.random()*Math.PI*2,sp=2+Math.random()*5;
-    fxList.push({mesh:m,vx:Math.cos(a)*sp,vy:3+Math.random()*5,vz:Math.sin(a)*sp,life:0.5,maxLife:0.5,type:'particle'});
-  }
-}
-
-function updateFX(dt){
-  for(let i=fxList.length-1;i>=0;i--){
-    const f=fxList[i];f.life-=dt;
-    if(f.life<=0){worldGroup.remove(f.mesh);fxList.splice(i,1);continue;}
-    if(f.type==='particle'){f.vy-=18*dt;f.mesh.position.x+=f.vx*dt;f.mesh.position.y+=f.vy*dt;f.mesh.position.z+=f.vz*dt;f.mesh.scale.setScalar(f.life/f.maxLife);}
-    else if(f.type==='sprite'){f.mesh.position.y+=f.vy*dt;f.mesh.material.opacity=f.life/f.maxLife;}
-    else if(f.type==='beam'){f.mesh.material.opacity=0.65*(f.life/f.maxLife);}
-  }
-}
-
-function updateHUD(){
-  if(gameState.mode==='fps'){
-    document.getElementById('hud-blue-score').textContent=gameState.fps.blueScore;
-    document.getElementById('hud-red-score').textContent=gameState.fps.redScore;
-    const min = Math.floor(Math.max(0, gameState.timer) / 60);
-    const sec = (Math.max(0, gameState.timer) % 60).toFixed(1).padStart(4, '0');
-    document.getElementById('hud-timer').textContent=`${min}:${sec}`;
-  } else if(gameState.mode==='tag'){
-    const min = Math.floor(Math.max(0, gameState.timer) / 60);
-    const sec = (Math.max(0, gameState.timer) % 60).toFixed(1).padStart(4, '0');
-    document.getElementById('hud-timer').textContent=`${min}:${sec}`;
-    if(gameState.tagRole==='seeker' && gameState.seekerStunTimer>0){
-      document.getElementById('hud-phase-text').textContent=`⚡ スタン中（残り ${gameState.seekerStunTimer.toFixed(1)}秒）`;
-    } else {
-      document.getElementById('hud-phase-text').textContent='鬼ごっこ進行中（2分勝負）';
-    }
-  } else if(gameState.mode==='prophunt'){
-    const elapsed = PH_MATCH_DURATION_SEC - gameState.timer;
-    if(elapsed < HIDE_PHASE_SEC){
-      const hideLeft = Math.max(0, HIDE_PHASE_SEC - elapsed);
-      document.getElementById('hud-timer').textContent=hideLeft.toFixed(1)+'s';
-      document.getElementById('hud-phase-text').textContent = gameState.phRole==='seeker'
-        ? `🌌 別空間で待機中（残り ${Math.ceil(hideLeft)}秒）`
-        : `🪴 隠れタイム（残り ${Math.ceil(hideLeft)}秒）`;
-    } else {
-      const min = Math.floor(Math.max(0, gameState.timer) / 60);
-      const sec = (Math.max(0, gameState.timer) % 60).toFixed(1).padStart(4, '0');
-      document.getElementById('hud-timer').textContent=`${min}:${sec}`;
-      document.getElementById('hud-phase-text').textContent='🔍 鬼が捜索中！';
-    }
-  }
-
-  document.getElementById('hud-score').textContent=Math.floor(gameState.score).toLocaleString();
-  const cdOverlay=document.getElementById('skill-cooldown-overlay');
-  if(gameState.mode==='fps' || (gameState.mode==='prophunt' && gameState.phRole==='seeker')){
-    cdOverlay.style.transform=`scaleY(${gameState.fps.reloadTimer>0?(gameState.fps.reloadTimer/1.0):0})`;
-  } else {
-    cdOverlay.style.transform=`scaleY(${Math.max(0,player.skillCooldown/player.skillMaxCooldown)})`;
-  }
-}
-
-function updateHeartsHUD(){
-  const c=document.getElementById('hud-hearts');c.innerHTML='';
-  for(let i=0;i<gameState.maxHp;i++){const s=document.createElement('span');s.textContent=i<gameState.hp?'❤️':'🖤';c.appendChild(s);}
-}
-function updateDisguiseHUD(){
-  if(player.disguise){document.getElementById('hud-disguise-icon').textContent=player.disguise.icon;document.getElementById('hud-disguise-name').textContent=player.disguise.name;}
-  else{document.getElementById('hud-disguise-icon').textContent='🏃';document.getElementById('hud-disguise-name').textContent='人間（未変身）';}
-}
-function updateLockHUD(){
-  document.getElementById('lock-icon').textContent=player.locked?'🔒':'🔓';
-  document.getElementById('lock-label').textContent=player.locked?'固定中':'固定';
-}
-let bannerTimeout=null;
-function showBanner(t,s){
-  document.getElementById('banner-title').textContent=t;document.getElementById('banner-sub').textContent=s;
-  const b=document.getElementById('center-banner');b.classList.remove('opacity-0','scale-90');b.classList.add('opacity-100','scale-100');
-  if(bannerTimeout)clearTimeout(bannerTimeout);
-  bannerTimeout=setTimeout(()=>{b.classList.remove('opacity-100','scale-100');b.classList.add('opacity-0','scale-90');},3400);
-}
-function pushToast(t,c='text-white'){
-  const f=document.getElementById('toast-feed'),el=document.createElement('div');
-  el.className=`px-3.5 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-xs font-black shadow-lg ${c}`;
-  el.textContent=t;f.appendChild(el);setTimeout(()=>el.remove(),2600);
-}
-
-// ==========================================
-// メインフレーム更新
-// ==========================================
-function updateFrame(dt){
+function update(dt){
   if(gameState.screen!=='playing'||gameState.paused)return;
-  gameState.timer-=dt;
-  if(gameState.invulnTimer>0)gameState.invulnTimer-=dt;
-  if(player.skillCooldown>0)player.skillCooldown-=dt;
-  if(player.dashTimer>0)player.dashTimer-=dt;
-  if(player.tauntCooldown>0)player.tauntCooldown-=dt;
-  if(gameState.seekerStunTimer>0)gameState.seekerStunTimer=Math.max(0, gameState.seekerStunTimer-dt);
 
-  if(gameState.mode === 'prophunt'){
-    const elapsed = PH_MATCH_DURATION_SEC - gameState.timer;
-    if(!gameState.prophuntSeekerDeployed && elapsed >= HIDE_PHASE_SEC){
-      gameState.prophuntSeekerDeployed = true;
-      if(gameState.phRole === 'seeker'){
-        player.pos.set(0, 0, 12);
-        player.vel.set(0, 0, 0);
-        sound.playTeleport();
-        showBanner('🔫 試合場へテレポート完了！','30秒経過！怪しいモノを銃で撃って見つけ出せ！');
-      } else {
-        sound.playTeleport();
-        showBanner('🚨 30秒経過！鬼が出撃した！','動くとバレやすい！[Q]で角度固定してやり過ごそう！');
+  if(gameState.mode==='fps'){
+    if(gameState.fps.fireCooldown>0)gameState.fps.fireCooldown-=dt;
+    if(gameState.fps.recoil>0)gameState.fps.recoil=Math.max(0,gameState.fps.recoil-dt*8);
+    if(player.weaponMesh?.userData.muzzleFlash){
+      player.weaponMesh.userData.muzzleFlash.material.opacity=Math.max(0,player.weaponMesh.userData.muzzleFlash.material.opacity-dt*18);
+    }
+
+    if(gameState.isFireHeld && !gameState.bagOpen && gameState.fps.respawnTimer<=0 && gameState.fps.reloadTimer<=0 && gameState.fps.fireCooldown<=0){
+      if(getCurrentWeaponDef()){
+        shootGun();
       }
     }
-  }
 
-  if(gameState.mode === 'fps'){
-    gameState.chestSpawnTimer -= dt;
-    if(gameState.chestSpawnTimer <= 0){
-      gameState.chestSpawnTimer = 14.0;
-      spawnSupplyChestAtRandom();
-    }
-    gameState.ammoCrateSpawnTimer -= dt;
-    if(gameState.ammoCrateSpawnTimer <= 0){
-      gameState.ammoCrateSpawnTimer = 12.0;
-      spawnAmmoCrateAtRandom();
-    }
-    updatePickupsAndProximity(dt);
-  }
-
-  if(gameState.mode==='fps'&&gameState.fps.respawnTimer>0){
-    gameState.fps.respawnTimer-=dt;
-    if(gameState.fps.respawnTimer<=0)respawnFPSPlayer();
-  }
-
-  if(canUseGun() || gameState.mode==='fps'){
-    if(gameState.fps.fireCooldown>0)gameState.fps.fireCooldown-=dt;
     if(gameState.fps.reloadTimer>0){
       gameState.fps.reloadTimer-=dt;
       if(gameState.fps.reloadTimer<=0){
-        const wDef = gameState.mode==='fps' ? getCurrentWeaponDef() : WEAPON_DEFS.rifle;
+        const wDef = getCurrentWeaponDef();
         if(wDef){
           const curMag = gameState.fps.magAmmo[wDef.id] || 0;
           const pool = gameState.fps.ammoPool[wDef.ammoType] || 0;
           const need = wDef.magSize - curMag;
-          const add = Math.min(need, pool);
-          gameState.fps.magAmmo[wDef.id] = curMag + add;
-          gameState.fps.ammoPool[wDef.ammoType] = pool - add;
+          const take = Math.min(need, pool);
+          gameState.fps.magAmmo[wDef.id] = curMag + take;
+          gameState.fps.ammoPool[wDef.ammoType] = pool - take;
         }
         updateFPSHUD();
         if(gameState.bagOpen) renderBagUI();
-        pushToast('✅ リロード完了！','text-emerald-300');
       }
     }
-    if(gameState.isFireHeld && canUseGun() && !gameState.bagOpen && gameState.fps.fireCooldown<=0 && gameState.fps.reloadTimer<=0){
+    if(gameState.fps.respawnTimer>0){
+      gameState.fps.respawnTimer-=dt;
+      if(gameState.fps.respawnTimer<=0)respawnFPSPlayer();
+    }
+
+    gameState.chestSpawnTimer -= dt;
+    if(gameState.chestSpawnTimer <= 0){
+      gameState.chestSpawnTimer = 11.0;
+      spawnSupplyChestAtRandom();
+    }
+    gameState.ammoCrateSpawnTimer -= dt;
+    if(gameState.ammoCrateSpawnTimer <= 0){
+      gameState.ammoCrateSpawnTimer = 13.0;
+      spawnAmmoCrateAtRandom();
+    }
+
+    updatePickupsAndProximity(dt);
+  } else if(gameState.mode==='prophunt' && gameState.phRole==='seeker'){
+    if(gameState.fps.fireCooldown>0)gameState.fps.fireCooldown-=dt;
+    if(gameState.fps.recoil>0)gameState.fps.recoil=Math.max(0,gameState.fps.recoil-dt*8);
+    if(player.weaponMesh?.userData.muzzleFlash){
+      player.weaponMesh.userData.muzzleFlash.material.opacity=Math.max(0,player.weaponMesh.userData.muzzleFlash.material.opacity-dt*18);
+    }
+    if(gameState.isFireHeld && gameState.fps.reloadTimer<=0 && gameState.fps.fireCooldown<=0){
       shootGun();
     }
-    if(player.weaponMesh?.userData.muzzleFlash&&player.weaponMesh.userData.muzzleFlash.material.opacity>0){
-      player.weaponMesh.userData.muzzleFlash.material.opacity=Math.max(0,player.weaponMesh.userData.muzzleFlash.material.opacity-dt*18);
+    if(gameState.fps.reloadTimer>0){
+      gameState.fps.reloadTimer-=dt;
+      if(gameState.fps.reloadTimer<=0){
+        const wDef = WEAPON_DEFS.rifle;
+        const curMag = gameState.fps.magAmmo.rifle || 0;
+        const pool = gameState.fps.ammoPool.rifle || 0;
+        const need = wDef.magSize - curMag;
+        const take = Math.min(need, pool);
+        gameState.fps.magAmmo.rifle = curMag + take;
+        gameState.fps.ammoPool.rifle = pool - take;
+        updateFPSHUD();
+      }
     }
   }
 
+  gameState.timer-=dt;
   if(gameState.timer<=0){
+    gameState.timer=0;
     if(amIMatchHost()) finishMatchInRTDB();
     const win = gameState.mode==='fps'
       ? (gameState.fps.team==='blue' ? gameState.fps.blueScore>=gameState.fps.redScore : gameState.fps.redScore>=gameState.fps.blueScore)
@@ -4125,225 +4096,382 @@ function updateFrame(dt){
     return;
   }
 
-  let inX=0,inZ=0;
-  if(keys['KeyW']||keys['ArrowUp'])inZ-=1;if(keys['KeyS']||keys['ArrowDown'])inZ+=1;
-  if(keys['KeyA']||keys['ArrowLeft'])inX-=1;if(keys['KeyD']||keys['ArrowRight'])inX+=1;
-  if(joystick.active){inX+=joystick.dx;inZ+=joystick.dy;}
+  if(gameState.invulnTimer>0)gameState.invulnTimer-=dt;
+  if(player.skillCooldown>0)player.skillCooldown=Math.max(0,player.skillCooldown-dt);
+  if(player.dashTimer>0)player.dashTimer=Math.max(0,player.dashTimer-dt);
+  if(player.tauntCooldown>0)player.tauntCooldown=Math.max(0,player.tauntCooldown-dt);
 
-  const isStunnedSeeker = (gameState.mode==='tag' && gameState.tagRole==='seeker' && gameState.seekerStunTimer>0);
-  const canMove=!(gameState.mode==='fps'&&gameState.fps.respawnTimer>0) && !isStunnedSeeker;
-  const inputLen=Math.hypot(inX,inZ);
-  let moveSpeedVal=0;
-
-  if(canMove && !gameState.bagOpen && inputLen>0.05){
-    if(player.locked){player.locked=false;updateLockHUD();}
-    const nx=inX/Math.max(1,inputLen),nz=inZ/Math.max(1,inputLen);
-    const yaw = (canUseGun() || gameState.mode==='fps') ? player.fpsYaw : camCtrl.yaw;
-    const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
-    const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
-    const moveDir=new THREE.Vector3().addScaledVector(forward,-nz).addScaledVector(right,nx).normalize();
-    let spd=player.speed;
-    if(gameState.isAiming) spd *= 0.65;
-    if(player.dashTimer>0)spd*=1.75;
-    player.vel.x=moveDir.x*spd;player.vel.z=moveDir.z*spd;moveSpeedVal=spd;
-    if(!canUseGun() && gameState.mode!=='fps') player.rotY=lerpAngle(player.rotY,Math.atan2(moveDir.x,moveDir.z),dt*14);
-  } else {
-    player.vel.x*=Math.pow(0.001,dt);player.vel.z*=Math.pow(0.001,dt);
+  const skillOverlay=document.getElementById('skill-cooldown-overlay');
+  if(skillOverlay){
+    skillOverlay.style.transform=`scaleY(${(gameState.mode==='fps'||(gameState.mode==='prophunt'&&gameState.phRole==='seeker'))?0:(player.skillCooldown/player.skillMaxCooldown)})`;
   }
 
-  player.vel.y-=26*dt;player.pos.x+=player.vel.x*dt;player.pos.z+=player.vel.z*dt;
+  const totalDur = getDurationForMode(gameState.mode);
+  const elapsed = totalDur - gameState.timer;
+
+  if(gameState.mode==='prophunt'){
+    const inHidePhase = elapsed < HIDE_PHASE_SEC;
+    if(inHidePhase){
+      document.getElementById('hud-phase-text').textContent=`隠れフェーズ（鬼待機 残り${Math.ceil(HIDE_PHASE_SEC - elapsed)}秒）`;
+    } else {
+      document.getElementById('hud-phase-text').textContent='捜索フェーズ（鬼が銃で捜索中！）';
+      if(gameState.phRole==='seeker' && !gameState.prophuntSeekerDeployed){
+        gameState.prophuntSeekerDeployed = true;
+        player.pos.set((Math.random()-0.5)*16, 0, -24);
+        player.vel.set(0,0,0);
+        player.fpsYaw = 0; player.fpsPitch = 0;
+        sound.playTeleport();
+        showBanner('🔫 試合場へテレポート完了！','怪しいモノを撃ち抜け！口笛の音に注意！');
+      }
+    }
+  } else if(gameState.mode==='tag'){
+    document.getElementById('hud-phase-text').textContent='鬼ごっこ進行中（2分勝負・接触で鬼3秒スタン）';
+  } else {
+    document.getElementById('hud-phase-text').textContent=`チームFPS（${APP.serverId}）`;
+  }
+
+  updatePlayerMovement(dt);
+  if(gameState.mode==='fps')updateFPSBots(dt);
+  else if(gameState.mode==='tag')updateTagMode(dt);
+  else if(gameState.mode==='prophunt')updatePropHuntMode(dt);
+
+  updateRemotePlayersInterpolation(dt);
+  updateActiveProjectiles(dt);
+  updateCamera(dt);
+  updateFX(dt);
+
+  if(gameState.mode==='fps'){
+    document.getElementById('hud-blue-score').textContent=gameState.fps.blueScore;
+    document.getElementById('hud-red-score').textContent=gameState.fps.redScore;
+  }
+  const min=Math.floor(gameState.timer/60), sec=(gameState.timer%60).toFixed(1).padStart(4,'0');
+  document.getElementById('hud-timer').textContent=`${min}:${sec}`;
+  document.getElementById('hud-score').textContent=Math.floor(gameState.score).toLocaleString();
+
+  // 次のレベルまでの残りポイント表示更新
+  const nextLvHint = document.getElementById('hud-next-lv-hint');
+  if(nextLvHint){
+    const remPts = POINTS_PER_LEVEL - (Math.floor(gameState.score) % POINTS_PER_LEVEL);
+    nextLvHint.textContent = `(次Lvまで${remPts.toLocaleString()}pt)`;
+  }
+}
+
+function updateRemotePlayersInterpolation(dt){
+  const alpha=Math.min(1,dt*14);
+  Object.values(remotePlayers).forEach(rp=>{
+    if(!rp.mesh)return;
+    const dx=rp.targetPos.x-rp.mesh.position.x, dz=rp.targetPos.z-rp.mesh.position.z;
+    const dist=Math.hypot(dx,dz);
+    rp.mesh.position.lerp(rp.targetPos,alpha);
+    if(typeof rp.targetRotY === 'number'){
+      let diff = rp.targetRotY - rp.mesh.rotation.y;
+      while(diff > Math.PI) diff -= Math.PI * 2;
+      while(diff < -Math.PI) diff += Math.PI * 2;
+      rp.mesh.rotation.y += diff * alpha;
+    } else if(dist>0.02 && !rp.disguise){
+      rp.mesh.rotation.y=Math.atan2(dx,dz);
+    }
+    if(!rp.disguise){
+      animateCharacter(rp.mesh,dt,dist>0.02?8.5:0,true);
+    }
+  });
+}
+
+function updatePlayerMovement(dt){
+  if(gameState.mode==='fps'&&gameState.fps.respawnTimer>0)return;
+
+  if(gameState.mode==='tag' && gameState.tagRole==='seeker' && gameState.seekerStunTimer>0){
+    gameState.seekerStunTimer = Math.max(0, gameState.seekerStunTimer - dt);
+    if(player.mesh) player.mesh.position.copy(player.pos);
+    return;
+  }
+
+  let inX=0, inZ=0;
+  if(!gameState.bagOpen){
+    if(keys['KeyW']||keys['ArrowUp'])inZ-=1;
+    if(keys['KeyS']||keys['ArrowDown'])inZ+=1;
+    if(keys['KeyA']||keys['ArrowLeft'])inX-=1;
+    if(keys['KeyD']||keys['ArrowRight'])inX+=1;
+    if(joystick.active){inX=joystick.dx;inZ=joystick.dy;}
+  }
+  const mag=Math.hypot(inX,inZ);if(mag>1){inX/=mag;inZ/=mag;}
+  if(mag>0.1&&player.locked){player.locked=false;updateLockHUD();}
+
+  const yaw = (canUseGun() || gameState.mode==='fps') ? player.fpsYaw : camCtrl.yaw;
+  const fX=-Math.sin(yaw), fZ=-Math.cos(yaw), rX=Math.cos(yaw), rZ=-Math.sin(yaw);
+  const wX=rX*inX+fX*(-inZ), wZ=rZ*inX+fZ*(-inZ);
+
+  const isAimingNow = gameState.isAiming && (canUseGun() || gameState.mode==='fps');
+  let spd = player.speed * (player.dashTimer>0?1.85:1.0) * (isAimingNow?0.58:1.0);
+  if(gameState.mode==='tag'&&gameState.tagRole==='seeker') spd *= 1.15;
+
+  player.vel.x=wX*spd;player.vel.z=wZ*spd;player.vel.y-=28*dt;
+  player.pos.x+=player.vel.x*dt;
+  player.pos.z+=player.vel.z*dt;
+  player.pos.y+=player.vel.y*dt;
+
   resolveHorizontalCollisions(player.pos,player.radius,player.pos.y);
 
   const groundY=getGroundHeightAt(player.pos.x,player.pos.z,player.radius,player.pos.y);
-  player.pos.y+=player.vel.y*dt;
   if(player.pos.y<=groundY){player.pos.y=groundY;player.vel.y=0;player.onGround=true;}else player.onGround=false;
 
   for(const jp of jumpPads){
-    if(Math.hypot(player.pos.x-jp.x,player.pos.z-jp.z)<jp.radius&&player.pos.y<1.2){
+    if(Math.hypot(player.pos.x-jp.x,player.pos.z-jp.z)<jp.radius&&player.pos.y<=0.4){
       player.vel.y=18.5;player.onGround=false;sound.playSpring();
     }
   }
 
-  if(player.mesh){
-    player.mesh.position.copy(player.pos);
-    if(!canUseGun() && gameState.mode!=='fps'){
+  if(!canUseGun() && gameState.mode!=='fps'){
+    if(mag>0.1&&!player.locked){
+      const tRot=Math.atan2(wX,wZ);let diff=tRot-player.rotY;
+      while(diff>Math.PI)diff-=Math.PI*2;while(diff<-Math.PI)diff+=Math.PI*2;
+      player.rotY+=diff*Math.min(1,dt*14);
+    }
+    if(player.mesh){
+      player.mesh.position.copy(player.pos);
       player.mesh.rotation.y=player.locked?player.lockedRotY:player.rotY;
-      if(player.mesh.userData.joints)animateCharacter(player.mesh,dt,moveSpeedVal,player.onGround);
+      if(!player.disguise)animateCharacter(player.mesh,dt,Math.hypot(player.vel.x,player.vel.z),player.onGround);
+    }
+  } else if(player.mesh){
+    player.mesh.position.copy(player.pos);
+  }
+}
+
+function updateTagMode(dt){
+  if(gameState.tagRole==='runner'){
+    addMatchPoints(dt * 12);
+
+    Object.values(remotePlayers).forEach(rp=>{
+      if(rp.mode==='tag' && rp.role==='seeker'){
+        const d = Math.hypot(rp.mesh.position.x - player.pos.x, rp.mesh.position.z - player.pos.z);
+        if(d < 1.85 && gameState.invulnTimer <= 0){
+          takePlayerDamage(1, rp.username || '鬼');
+        }
+      }
+    });
+
+    for(const s of seekersList){
+      if(s.stunTimer > 0){
+        s.stunTimer = Math.max(0, s.stunTimer - dt);
+        animateCharacter(s.mesh, dt, 0, true);
+        continue;
+      }
+
+      const distToPlayer = Math.hypot(player.pos.x - s.pos.x, player.pos.z - s.pos.z);
+      const eyeFrom = new THREE.Vector3(s.pos.x, 1.5, s.pos.z);
+      const eyeTo = new THREE.Vector3(player.pos.x, 1.3, player.pos.z);
+      const canSeePlayer = distToPlayer < 45 && hasLineOfSight(eyeFrom, eyeTo).clear;
+
+      let tx, tz, spd;
+      if(canSeePlayer){
+        tx = player.pos.x; tz = player.pos.z; spd = s.baseSpeed * 1.12;
+      } else {
+        s.patrolTimer -= dt;
+        if(s.patrolTimer <= 0 || Math.hypot(s.targetPos.x - s.pos.x, s.targetPos.z - s.pos.z) < 2.0){
+          s.patrolTimer = 3.0 + Math.random()*3.0;
+          s.targetPos.set((Math.random()-0.5)*185, 0, (Math.random()-0.5)*185);
+        }
+        tx = s.targetPos.x; tz = s.targetPos.z; spd = s.baseSpeed * 0.72;
+      }
+
+      const dx = tx - s.pos.x, dz = tz - s.pos.z, dist = Math.hypot(dx, dz);
+      if(dist > 0.1){
+        s.pos.x += (dx/dist)*spd*dt;
+        s.pos.z += (dz/dist)*spd*dt;
+        s.rotY = Math.atan2(dx, dz);
+        s.moveSpeed = spd;
+      } else {
+        s.moveSpeed = 0;
+      }
+
+      const hitWall = resolveHorizontalCollisions(s.pos, s.radius, 0);
+      if(hitWall && !canSeePlayer){
+        s.patrolTimer = 0;
+      }
+      s.mesh.position.copy(s.pos); s.mesh.rotation.y = s.rotY;
+      animateCharacter(s.mesh, dt, s.moveSpeed, true);
+
+      if(distToPlayer < 1.85 && gameState.invulnTimer <= 0){
+        takePlayerDamage(1, '鬼 AI');
+        s.stunTimer = 3.0;
+        sound.playStun();
+        addFloatingSprite(s.pos.x, 2.6, s.pos.z, '💫 3秒スタン！', '#facc15');
+        pushToast('💫 鬼にタッチされたが、鬼は3秒間動けない！今のうちに逃げろ！','text-amber-300');
+      }
+    }
+  } else {
+    if(gameState.seekerStunTimer > 0){
+      return;
+    }
+
+    Object.values(remotePlayers).forEach(rp=>{
+      if(rp.mode==='tag' && rp.role==='runner'){
+        const d = Math.hypot(rp.mesh.position.x - player.pos.x, rp.mesh.position.z - player.pos.z);
+        if(d < 1.85){
+          gameState.seekerStunTimer = 3.0;
+          sound.playStun();
+          gameState.stats.tagsMade++;
+          addMatchPoints(350);
+          sendHitEventToRemote(rp.uid, 1, false);
+          showBanner('👹 タッチ成功＆3秒スタン！',`${rp.username} にダメージ！鬼は3秒間硬直します (+350pt)`);
+        }
+      }
+    });
+
+    for(const r of runnersList){
+      if(r.caught) continue;
+      const distP = Math.hypot(player.pos.x - r.pos.x, player.pos.z - r.pos.z);
+      if(distP < 26){
+        const dx = r.pos.x - player.pos.x, dz = r.pos.z - player.pos.z;
+        r.targetRotY = Math.atan2(dx, dz);
+      } else {
+        r.wanderTimer -= dt;
+        if(r.wanderTimer <= 0){
+          r.wanderTimer = 1.5 + Math.random()*2;
+          r.targetRotY += (Math.random()-0.5)*2.5;
+        }
+      }
+      r.pos.x += Math.sin(r.targetRotY)*r.speed*dt;
+      r.pos.z += Math.cos(r.targetRotY)*r.speed*dt;
+      if(resolveHorizontalCollisions(r.pos, r.radius, 0)){
+        r.targetRotY += Math.PI * 0.75;
+      }
+      r.mesh.position.copy(r.pos); r.mesh.rotation.y = r.targetRotY;
+      animateCharacter(r.mesh, dt, r.speed, true);
+
+      if(distP < 1.85){
+        r.hp--;
+        gameState.seekerStunTimer = 3.0;
+        sound.playStun();
+        gameState.stats.tagsMade++;
+        addMatchPoints(350);
+        if(r.hp <= 0){
+          r.caught = true; r.mesh.visible = false;
+          showBanner('👹 逃走者を撃破＆3秒スタン！','鬼は3秒間動けなくなります (+350pt)');
+        } else {
+          r.pos.set((Math.random()-0.5)*150, 0, (Math.random()-0.5)*150);
+          showBanner(`👹 ダメージ命中（相手残り❤️${r.hp}）！`,'タッチ後3秒間は鬼が硬直します (+350pt)');
+        }
+        break;
+      }
     }
   }
+}
 
-  if(gameState.mode==='fps'){
-    updateFPSBots(dt);
-  } else {
-    updateEntities(dt);
+function updatePropHuntMode(dt){
+  if(gameState.phRole==='hider'){
+    addMatchPoints(dt * 15);
+    let best=null, bestDist=4.2;
+    for(const p of propsList){
+      if(p.isNpcHider)continue;
+      const d=Math.hypot(player.pos.x-p.x,player.pos.z-p.z);
+      if(d<bestDist){bestDist=d;best=p;}
+    }
+    player.targetedProp=best;
+    const promptEl=document.getElementById('target-prompt'), promptText=document.getElementById('target-prompt-text');
+    if(best){promptText.textContent=`Eで「${best.def.name}」に変身`;promptEl.classList.remove('opacity-0');}
+    else promptEl.classList.add('opacity-0');
   }
-  updateActiveProjectiles(dt);
-  updateRemotePlayers(dt);
-  updateCamera(dt);
-  updateFX(dt);
-  updateHUD();
 }
 
 function updateFPSBots(dt){
-  const targetTeam = gameState.fps.team;
   fpsBots.forEach(bot=>{
     if(bot.deadTimer>0){
       bot.deadTimer-=dt;
       if(bot.deadTimer<=0){
-        bot.hp=bot.maxHp;
-        bot.pos.set((Math.random()-0.5)*22,0,bot.team==='blue'?76:-76);
-        bot.mesh.position.copy(bot.pos);
-        bot.mesh.visible=true;
+        bot.hp=bot.maxHp;bot.mesh.visible=true;
+        bot.pos.set((Math.random()-0.5)*28,0,bot.team==='blue'?76:-76);
       }
       return;
     }
-    const distToTarget=bot.pos.distanceTo(bot.targetPos);
-    if(distToTarget<2.5||bot.moveTimer<=0){
-      bot.moveTimer=2.5+Math.random()*2.5;
-      bot.targetPos.set((Math.random()-0.5)*170,0,(Math.random()-0.5)*170);
+
+    let targetPos=null;
+    let targetDist=999;
+    let isAimingPlayer=false;
+
+    if(bot.team!==gameState.fps.team && gameState.fps.respawnTimer<=0){
+      const d=bot.pos.distanceTo(player.pos);
+      if(d<targetDist){
+        targetDist=d;
+        targetPos=player.pos.clone();
+        isAimingPlayer=true;
+      }
     }
+    Object.values(remotePlayers).forEach(rp=>{
+      if(rp.mode==='fps' && rp.team!==bot.team && (rp.hp||0)>0){
+        const d=bot.pos.distanceTo(rp.mesh.position);
+        if(d<targetDist){
+          targetDist=d;
+          targetPos=rp.mesh.position.clone();
+          isAimingPlayer=false;
+        }
+      }
+    });
+
+    const botEye = new THREE.Vector3(bot.pos.x, 1.55, bot.pos.z);
+    let losInfo = { clear: false, hitPoint: null, dist: 999 };
+    if(targetPos && targetDist < 70){
+      const targetCenter = new THREE.Vector3(targetPos.x, 1.25, targetPos.z);
+      losInfo = hasLineOfSight(botEye, targetCenter);
+    }
+
     bot.moveTimer-=dt;
-
-    const toPlayer=new THREE.Vector3().subVectors(player.pos,bot.pos);
-    const distToPlayer=toPlayer.length();
-    const botEye = bot.pos.clone().add(new THREE.Vector3(0,1.65,0));
-    const playerChest = player.pos.clone().add(new THREE.Vector3(0,1.35,0));
-    const losCheck = (bot.team!==targetTeam && gameState.fps.respawnTimer<=0 && distToPlayer<72)
-      ? hasLineOfSight(botEye, playerChest)
-      : { clear: false };
-
-    let desiredDir;
-    if(losCheck.clear){
-      desiredDir=toPlayer.clone().setY(0).normalize();
-      bot.shootTimer-=dt;
-      if(bot.shootTimer<=0){
-        bot.shootTimer=1.65+Math.random()*1.1;
-        const shotEnd = playerChest.clone().add(new THREE.Vector3((Math.random()-0.5)*0.4,(Math.random()-0.5)*0.3,(Math.random()-0.5)*0.4));
-        spawnVisibleBullet(botEye, shotEnd, bot.team==='blue'?0x38bdf8:0xf43f5e, 140, true);
-        if(Math.random()<0.34) takePlayerDamage(15, bot.name);
-      }
-    } else {
-      desiredDir=new THREE.Vector3().subVectors(bot.targetPos,bot.pos).setY(0).normalize();
-    }
-
-    const sp=losCheck.clear&&distToPlayer<18?2.5:6.5;
-    bot.pos.addScaledVector(desiredDir,sp*dt);
-    const hitWall = resolveHorizontalCollisions(bot.pos,0.48,bot.pos.y);
-    if(hitWall){
-      bot.moveTimer = 0;
-      bot.targetPos.set((Math.random()-0.5)*170,0,(Math.random()-0.5)*170);
-    }
-
-    bot.rotY=lerpAngle(bot.rotY,Math.atan2(desiredDir.x,desiredDir.z),dt*8);
-    bot.mesh.position.copy(bot.pos);bot.mesh.rotation.y=bot.rotY;
-    animateCharacter(bot.mesh,dt,sp,true);
-  });
-}
-
-function updateEntities(dt){
-  if(gameState.mode==='prophunt'&&gameState.phRole==='hider'){
-    let best=null,bestD=4.8;
-    for(const p of propsList){
-      const d=Math.hypot(player.pos.x-p.x,player.pos.z-p.z);
-      if(d<bestD){bestD=d;best=p;}
-    }
-    player.targetedProp=best;
-    const promptEl=document.getElementById('target-prompt'),promptText=document.getElementById('target-prompt-text');
-    if(best){promptText.textContent=`Eで「${best.def.name}」に変身`;promptEl.classList.remove('opacity-0');}
-    else if(player.disguise){promptText.textContent='Eで人間に戻る';promptEl.classList.remove('opacity-0');}
-    else{promptEl.classList.add('opacity-0');}
-  } else if(gameState.mode !== 'fps'){
-    document.getElementById('target-prompt').classList.add('opacity-0');
-  }
-
-  for(const s of seekersList){
-    if(s.stunTimer > 0){
-      s.stunTimer = Math.max(0, s.stunTimer - dt);
-      s.mesh.position.copy(s.pos);
-      animateCharacter(s.mesh, dt, 0, true);
-      continue;
-    }
-
-    const distToPlayer = s.pos.distanceTo(player.pos);
-    let target = s.targetPos;
-    let spd = s.baseSpeed;
-    const chasingPlayer = (gameState.mode==='tag' && gameState.tagRole==='runner' && distToPlayer < 45);
-    if(chasingPlayer){
-      target = player.pos;
-      spd = 8.4;
-    } else {
-      s.patrolTimer -= dt;
-      if(s.patrolTimer <= 0 || s.pos.distanceTo(s.targetPos) < 2.5){
-        s.patrolTimer = 3.0 + Math.random()*2.5;
-        s.targetPos.set((Math.random()-0.5)*185, 0, (Math.random()-0.5)*185);
-      }
-    }
-
-    const dir = new THREE.Vector3().subVectors(target, s.pos).setY(0);
-    if(dir.length() > 0.1){
-      dir.normalize();
-      s.pos.addScaledVector(dir, spd * dt);
-      const hitWall = resolveHorizontalCollisions(s.pos, s.radius, s.pos.y);
-      if(hitWall && !chasingPlayer){
-        s.patrolTimer = 0;
-        s.targetPos.set((Math.random()-0.5)*185, 0, (Math.random()-0.5)*185);
-      }
-      s.rotY = lerpAngle(s.rotY, Math.atan2(dir.x, dir.z), dt*8);
-    }
-    s.mesh.position.copy(s.pos);
-    s.mesh.rotation.y = s.rotY;
-    animateCharacter(s.mesh, dt, spd, true);
-
-    if(gameState.mode==='tag' && gameState.tagRole==='runner' && distToPlayer < 1.55){
-      s.stunTimer = 3.0;
-      sound.playStun();
-      takePlayerDamage(1, '鬼 AI');
-    }
-  }
-
-  for(const r of runnersList){
-    if(r.caught) continue;
-    r.wanderTimer -= dt;
-    if(r.wanderTimer <= 0){
-      r.wanderTimer = 1.8 + Math.random()*2.0;
-      r.targetRotY = Math.random()*Math.PI*2;
-    }
-    const distToPlayer = r.pos.distanceTo(player.pos);
-    if(gameState.mode==='tag' && gameState.tagRole==='seeker' && distToPlayer < 26){
-      const away = new THREE.Vector3().subVectors(r.pos, player.pos).setY(0).normalize();
-      r.targetRotY = Math.atan2(away.x, away.z);
-    }
-    r.rotY = lerpAngle(r.rotY, r.targetRotY, dt*6);
-    const dir = new THREE.Vector3(Math.sin(r.rotY), 0, Math.cos(r.rotY));
-    r.pos.addScaledVector(dir, r.speed * dt);
-    const hitWall = resolveHorizontalCollisions(r.pos, r.radius, r.pos.y);
-    if(hitWall){
-      r.targetRotY += Math.PI * (0.6 + Math.random()*0.8);
-      r.wanderTimer = 1.2;
-    }
-    r.mesh.position.copy(r.pos);
-    r.mesh.rotation.y = r.rotY;
-    animateCharacter(r.mesh, dt, r.speed, true);
-
-    if(gameState.mode==='tag' && gameState.tagRole==='seeker' && gameState.seekerStunTimer<=0 && distToPlayer < 1.65){
-      r.hp = Math.max(0, r.hp - 1);
-      triggerSeekerTagHitAndStun(`Runner_${r.id+1}`, null);
-      if(r.hp <= 0){
-        r.caught = true;
-        r.mesh.visible = false;
-        pushToast(`🏆 Runner_${r.id+1} を確保！ +400pt`,'text-emerald-300');
-        gameState.score += 400;
+    if(bot.moveTimer<=0){
+      bot.moveTimer=2.0+Math.random()*2.0;
+      if(targetPos && !losInfo.clear){
+        const angle = Math.atan2(targetPos.x - bot.pos.x, targetPos.z - bot.pos.z) + (Math.random() > 0.5 ? 1.1 : -1.1);
+        bot.targetPos.set(
+          Math.max(-95, Math.min(95, bot.pos.x + Math.sin(angle)*14)),
+          0,
+          Math.max(-95, Math.min(95, bot.pos.z + Math.cos(angle)*14))
+        );
       } else {
-        r.pos.set((Math.random()-0.5)*160, 0, (Math.random()-0.5)*160);
+        bot.targetPos.set((Math.random()-0.5)*170,0,(Math.random()-0.5)*170);
       }
     }
-  }
+
+    const mdx=bot.targetPos.x-bot.pos.x, mdz=bot.targetPos.z-bot.pos.z, mdist=Math.hypot(mdx,mdz);
+    if(mdist>1.0){
+      bot.pos.x+=(mdx/mdist)*5.5*dt;
+      bot.pos.z+=(mdz/mdist)*5.5*dt;
+      bot.moveSpeed=5.5;
+    } else {
+      bot.moveSpeed=0;
+    }
+
+    const hitWall = resolveHorizontalCollisions(bot.pos, 0.5, 0);
+    if(hitWall) bot.moveTimer = 0;
+
+    bot.mesh.position.copy(bot.pos);
+    if(targetPos){
+      bot.rotY=Math.atan2(targetPos.x-bot.pos.x,targetPos.z-bot.pos.z);
+      bot.mesh.rotation.y=bot.rotY;
+    }
+    animateCharacter(bot.mesh,dt,bot.moveSpeed,true);
+
+    bot.shootTimer-=dt;
+    if(bot.shootTimer<=0 && targetPos && targetDist<65){
+      bot.shootTimer=1.4+Math.random()*1.1;
+      const muzzlePos = new THREE.Vector3(bot.pos.x, 1.5, bot.pos.z);
+      const targetCenter = new THREE.Vector3(targetPos.x, 1.25, targetPos.z);
+      const checkLos = hasLineOfSight(muzzlePos, targetCenter);
+
+      if(checkLos.clear){
+        spawnVisibleBullet(muzzlePos, targetCenter, 0xf43f5e, 145, true);
+        if(isAimingPlayer && Math.random() < 0.42){
+          takePlayerDamage(14, bot.name);
+        }
+      } else if(checkLos.hitPoint){
+        spawnVisibleBullet(muzzlePos, checkLos.hitPoint, 0xf43f5e, 145, true);
+      }
+    }
+  });
 }
 
 function updateCamera(dt){
   if(canUseGun() || gameState.mode==='fps'){
     const wDef = gameState.mode==='fps' ? getCurrentWeaponDef() : WEAPON_DEFS.rifle;
-    const targetFov = (gameState.isAiming && wDef) ? wDef.adsFov : 65;
+    const targetFov = (gameState.isAiming && wDef) ? wDef.adsFov : 68;
     if(Math.abs(camera.fov - targetFov) > 0.05){
       camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 16);
       camera.updateProjectionMatrix();
@@ -4351,45 +4479,138 @@ function updateCamera(dt){
 
     const eyePos=new THREE.Vector3(player.pos.x,player.pos.y+1.65,player.pos.z);
     camera.position.copy(eyePos);
-    const euler=new THREE.Euler(player.fpsPitch,player.fpsYaw,0,'YXZ');
-    camera.quaternion.setFromEuler(euler);
+    camera.rotation.order='YXZ';
+    camera.rotation.y=player.fpsYaw;
+    camera.rotation.x=player.fpsPitch + gameState.fps.recoil;
 
     if(player.weaponMesh){
-      const rightOff = gameState.isAiming ? 0.0 : 0.28;
-      const downOff  = gameState.isAiming ? -0.14 : -0.22;
-      const fwdOff   = gameState.isAiming ? -0.42 : -0.52;
-      const gunOffset=new THREE.Vector3(rightOff, downOff, fwdOff).applyQuaternion(camera.quaternion);
-      player.weaponMesh.position.copy(eyePos).add(gunOffset);
-      player.weaponMesh.quaternion.copy(camera.quaternion);
+      const camDir = new THREE.Vector3();
+      camera.getWorldDirection(camDir);
+      const right = new THREE.Vector3().crossVectors(camDir, camera.up).normalize();
+      const down = new THREE.Vector3().crossVectors(camDir, right).normalize();
+
+      const forwardDist = gameState.isAiming ? 0.42 : 0.48;
+      const rightDist   = gameState.isAiming ? 0.0  : 0.24;
+      const downDist    = gameState.isAiming ? 0.13 : 0.21;
+
+      player.weaponMesh.position.copy(eyePos)
+        .addScaledVector(camDir, forwardDist)
+        .addScaledVector(right, rightDist)
+        .addScaledVector(down, downDist);
+      player.weaponMesh.rotation.order='YXZ';
+      player.weaponMesh.rotation.y=player.fpsYaw;
+      player.weaponMesh.rotation.x=player.fpsPitch;
     }
     return;
   }
 
-  if(Math.abs(camera.fov - 65) > 0.05){
+  if(Math.abs(camera.fov - 65) > 0.1){
     camera.fov = 65;
     camera.updateProjectionMatrix();
   }
 
   camCtrl.dist+=(camCtrl.targetDist-camCtrl.dist)*Math.min(1,dt*8);
-  const target=new THREE.Vector3(player.pos.x,player.pos.y+player.height*0.65,player.pos.z);
-  const cx=target.x+Math.sin(camCtrl.yaw)*Math.cos(camCtrl.pitch)*camCtrl.dist;
-  const cy=Math.max(0.8,target.y+Math.sin(camCtrl.pitch)*camCtrl.dist);
-  const cz=target.z+Math.cos(camCtrl.yaw)*Math.cos(camCtrl.pitch)*camCtrl.dist;
-  camera.position.lerp(new THREE.Vector3(cx,cy,cz),Math.min(1,dt*16));
-  camera.lookAt(target);
+  const lookAt=new THREE.Vector3(player.pos.x,player.pos.y+1.15,player.pos.z);
+  const hDist=camCtrl.dist*Math.cos(camCtrl.pitch), vDist=camCtrl.dist*Math.sin(camCtrl.pitch);
+  const desiredCamPos=new THREE.Vector3(
+    lookAt.x+Math.sin(camCtrl.yaw)*hDist,
+    Math.max(0.6,lookAt.y+vDist),
+    lookAt.z+Math.cos(camCtrl.yaw)*hDist
+  );
+
+  const camDir = new THREE.Vector3().subVectors(desiredCamPos, lookAt);
+  const maxCamDist = camDir.length();
+  if(maxCamDist > 0.2 && worldObstacleMeshes.length > 0){
+    camDir.normalize();
+    raycaster.set(lookAt, camDir);
+    raycaster.near = 0.1;
+    raycaster.far = maxCamDist;
+    const camHits = raycaster.intersectObjects(worldObstacleMeshes, false);
+    if(camHits.length > 0){
+      const safeDist = Math.max(0.65, camHits[0].distance - 0.35);
+      camera.position.copy(lookAt).addScaledVector(camDir, safeDist);
+    } else {
+      camera.position.copy(desiredCamPos);
+    }
+  } else {
+    camera.position.copy(desiredCamPos);
+  }
+  camera.lookAt(lookAt);
 }
 
-function lerpAngle(a,b,t){let d=((b-a+Math.PI)%(Math.PI*2))-Math.PI;if(d<-Math.PI)d+=Math.PI*2;return a+d*Math.min(1,t);}
+function updateFX(dt){
+  for(let i=fxList.length-1;i>=0;i--){
+    const f=fxList[i];f.life-=dt;
+    if(f.type==='beam'){
+      if(f.mesh.material)f.mesh.material.opacity=Math.max(0,f.life/f.maxLife);
+    } else if(f.type==='sprite'){
+      f.mesh.position.y+=f.vy*dt;
+      if(f.mesh.material)f.mesh.material.opacity=Math.max(0,f.life/f.maxLife);
+    } else {
+      f.mesh.position.x+=f.vx*dt;f.mesh.position.y+=f.vy*dt;f.mesh.position.z+=f.vz*dt;f.vy-=16*dt;
+      f.mesh.scale.setScalar(Math.max(0.01,f.life/f.maxLife));
+    }
+    if(f.life<=0){
+      worldGroup.remove(f.mesh);
+      fxList.splice(i,1);
+    }
+  }
+}
 
-function endGame(isWin,manualQuit=false){
-  if(gameState.screen==='result'||gameState.screen==='title')return;
-  gameState.isFireHeld = false;
-  gameState.isInteractHeld = false;
+function spawn3DBurst(x,y,z,color,count=10){
+  const geo=getSharedGeo('burst_p_g',()=>new THREE.BoxGeometry(0.16,0.16,0.16));
+  const mat=getSharedMat(`burst_p_${color}`,()=>new THREE.MeshBasicMaterial({color}));
+  for(let i=0;i<count;i++){
+    const m=new THREE.Mesh(geo,mat);
+    m.position.set(x,y,z);worldGroup.add(m);
+    const a=Math.random()*Math.PI*2, spd=2+Math.random()*5;
+    fxList.push({mesh:m,vx:Math.cos(a)*spd,vy:3+Math.random()*5,vz:Math.sin(a)*spd,life:0.55,maxLife:0.55});
+  }
+}
+
+// ==========================================
+// UI更新＆終了処理
+// ==========================================
+function updateHeartsHUD(){
+  let h='';for(let i=0;i<gameState.maxHp;i++)h+=(i<gameState.hp)?'❤️':'🖤';
+  document.getElementById('hud-hearts').textContent=h;
+}
+function updateDisguiseHUD(){
+  if(player.disguise){document.getElementById('hud-disguise-icon').textContent=player.disguise.icon;document.getElementById('hud-disguise-name').textContent=player.disguise.name;}
+  else{document.getElementById('hud-disguise-icon').textContent='🏃';document.getElementById('hud-disguise-name').textContent='人間';}
+}
+function updateLockHUD(){
+  document.getElementById('lock-icon').textContent=player.locked?'🔒':'🔓';
+  document.getElementById('lock-label').textContent=player.locked?'固定中':'固定';
+}
+
+let bannerTimeout=null;
+function showBanner(title,sub){
+  document.getElementById('banner-title').textContent=title;document.getElementById('banner-sub').textContent=sub;
+  const b=document.getElementById('center-banner');b.classList.remove('opacity-0','scale-90');b.classList.add('opacity-100','scale-100');
+  clearTimeout(bannerTimeout);bannerTimeout=setTimeout(()=>{b.classList.add('opacity-0','scale-90');b.classList.remove('opacity-100','scale-100');},3200);
+}
+function pushToast(text,colorClass='text-white'){
+  const feed=document.getElementById('toast-feed'), el=document.createElement('div');
+  el.className=`px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-700 text-xs font-black shadow-lg ${colorClass}`;
+  el.textContent=text;feed.appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .3s';setTimeout(()=>el.remove(),300);},2400);
+}
+
+function endGame(isVictory,aborted=false){
+  if(gameState.screen==='result'&&!aborted)return;
+  gameState.screen=aborted?'title':'result';
+  gameState.paused=false;
+  gameState.bagOpen=false;
+  gameState.bagSelectedSlot=null;
+  gameState.bagDragSlot=null;
+  gameState.isFireHeld=false;
+  gameState.isInteractHeld=false;
   resetChestHoldUI();
   setAimingState(false);
-  leavePlayingMode();sound.stopBGM();stopActiveMatchSync();
-  gameState.screen=manualQuit?'title':'result';
   updateKeybindGuideUI();
+  document.getElementById('inventory-overlay').classList.remove('show');
+  pauseOverlay.classList.remove('show');leavePlayingMode();sound.stopBGM();stopActiveMatchSync();
   bindServerPresence();
 
   document.getElementById('hud-top').classList.add('hidden');
@@ -4397,137 +4618,176 @@ function endGame(isWin,manualQuit=false){
   document.getElementById('fps-crosshair').style.display='none';
   document.getElementById('fps-hud').style.display='none';
   document.getElementById('fps-hotbar').classList.add('hidden');
-  document.getElementById('hud-fps-teams').classList.add('hidden');
-  document.getElementById('hud-fps-hp-box').classList.add('hidden');
-  document.getElementById('reticle-container').classList.add('hidden');
-  document.getElementById('target-prompt').classList.add('opacity-0');
   document.getElementById('btn-pause').classList.add('hidden');
-  document.getElementById('inventory-overlay').classList.remove('show');
-  if(player.weaponMesh){worldGroup.remove(player.weaponMesh);player.weaponMesh=null;}
-  if(manualQuit){
-    document.getElementById('title-screen').classList.remove('hidden');
-    document.getElementById('title-screen').classList.add('flex');
+  document.getElementById('target-prompt').classList.add('opacity-0');
+
+  if(aborted){
+    document.getElementById('title-screen').classList.remove('hidden');document.getElementById('title-screen').classList.add('flex');
     refreshLobbyMatchUI();
     return;
   }
-  if(isWin)sound.playWin();else sound.playLose();
-  document.getElementById('result-emoji').textContent=isWin?'🏆':'💀';
-  document.getElementById('result-title').textContent=isWin?'VICTORY! 勝利！':'DEFEAT... 敗北';
-  document.getElementById('result-subtitle').textContent=`サーバー [${APP.serverId}] の試合結果`;
+
+  if(isVictory){gameState.score+=1000;sound.playWin();}else sound.playLose();
+
+  // 勝利ボーナス1000pt加算後も5000pt達成ラインのレベルアップ判定を行う
+  const finalTier = Math.floor(gameState.score / POINTS_PER_LEVEL);
+  if(finalTier > gameState.matchLevelUps){
+    const diff = finalTier - gameState.matchLevelUps;
+    gameState.matchLevelUps = finalTier;
+    if(APP.profile){
+      APP.profile.level = Math.max(1, (APP.profile.level || 1) + diff);
+      saveSession(APP.profile);
+    }
+  }
+  updateLevelDisplays();
+
+  document.getElementById('result-emoji').textContent=isVictory?'🏆':'💥';
+  document.getElementById('result-title').textContent=isVictory?'VICTORY! 勝利！':'MATCH FINISHED!';
   document.getElementById('result-score').textContent=`${Math.floor(gameState.score).toLocaleString()} pt`;
-  const st=document.getElementById('result-stats');
-  st.innerHTML=gameState.mode==='fps'
-    ? `<div class="flex justify-between"><span>最終スコア</span><span class="font-bold text-white">🔵 ${gameState.fps.blueScore} - 🔴 ${gameState.fps.redScore}</span></div>
-       <div class="flex justify-between"><span>キル / デス</span><span class="font-bold text-amber-400">${gameState.stats.kills} Kill / ${gameState.stats.deaths} Death</span></div>`
-    : `<div class="flex justify-between"><span>変身 / 確保 / 口笛</span><span class="font-bold text-emerald-400">${gameState.stats.morphCount} / ${gameState.stats.tagsMade} / ${gameState.stats.tauntCount}</span></div>`;
+
+  const lvGainText = gameState.matchLevelUps > 0
+    ? ` <span class="text-amber-300 font-black">(+${gameState.matchLevelUps} UP!)</span>`
+    : '';
+  document.getElementById('result-level').innerHTML = `Lv.${APP.profile?.level || 1}${lvGainText}`;
+
+  const statsEl=document.getElementById('result-stats');
+  if(gameState.mode==='fps'){
+    statsEl.innerHTML=`
+      <div class="flex justify-between"><span>最終スコア:</span><span class="font-bold text-sky-300">BLUE ${gameState.fps.blueScore} - ${gameState.fps.redScore} RED</span></div>
+      <div class="flex justify-between"><span>撃破数 / デス数:</span><span class="font-bold text-amber-300">${gameState.stats.kills} キル / ${gameState.stats.deaths} デス</span></div>
+      <div class="flex justify-between"><span>レベルアップ基準:</span><span class="font-bold text-emerald-300">1試合 5,000pt ごとに +1 Lv</span></div>
+    `;
+  } else {
+    statsEl.innerHTML=`
+      <div class="flex justify-between"><span>変身・タッチ回数:</span><span class="font-bold text-emerald-300">${gameState.stats.morphCount + gameState.stats.tagsMade} 回</span></div>
+      <div class="flex justify-between"><span>レベルアップ基準:</span><span class="font-bold text-emerald-300">1試合 5,000pt ごとに +1 Lv</span></div>
+    `;
+  }
   document.getElementById('result-screen').classList.remove('hidden');
 }
 
-function animate(now){
-  requestAnimationFrame(animate);
-  const dt=Math.min(0.05,(now-(gameState.lastTime||now))/1000);gameState.lastTime=now;
-  if(gameState.screen==='playing')updateFrame(dt);
-  else{
-    const t=now*0.0002;
-    camera.position.set(Math.sin(t)*55,34,Math.cos(t)*55);
-    camera.lookAt(0,2,0);
-  }
-  renderer.render(scene,camera);
-}
-
 // ==========================================
-// UIイベント＆キー操作
+// イベントリスナー
 // ==========================================
 document.querySelectorAll('.mode-tab').forEach(tab=>{
   tab.addEventListener('click',()=>{
-    const mode=tab.dataset.mode;
     document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));
-    tab.classList.add('active');
     document.querySelectorAll('.lobby-panel').forEach(p=>p.classList.remove('active'));
-    document.querySelector(`.lobby-panel[data-panel="${mode}"]`).classList.add('active');
+    tab.classList.add('active');
+    document.querySelector(`.lobby-panel[data-panel="${tab.dataset.mode}"]`)?.classList.add('active');
   });
 });
 
-document.getElementById('tag-role-runner').addEventListener('click',()=>{gameState.tagRole='runner';document.getElementById('tag-role-runner').className='flex-1 py-1.5 rounded-lg text-xs font-black bg-sky-600 text-white';document.getElementById('tag-role-seeker').className='flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400';});
-document.getElementById('tag-role-seeker').addEventListener('click',()=>{gameState.tagRole='seeker';document.getElementById('tag-role-seeker').className='flex-1 py-1.5 rounded-lg text-xs font-black bg-rose-600 text-white';document.getElementById('tag-role-runner').className='flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400';});
-document.getElementById('ph-role-hider').addEventListener('click',()=>{gameState.phRole='hider';document.getElementById('ph-role-hider').className='flex-1 py-1.5 rounded-lg text-xs font-black bg-emerald-600 text-white';document.getElementById('ph-role-seeker').className='flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400';});
-document.getElementById('ph-role-seeker').addEventListener('click',()=>{gameState.phRole='seeker';document.getElementById('ph-role-seeker').className='flex-1 py-1.5 rounded-lg text-xs font-black bg-rose-600 text-white';document.getElementById('ph-role-hider').className='flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400';});
+document.getElementById('tag-role-runner').addEventListener('click',()=>{
+  gameState.tagRole='runner';
+  document.getElementById('tag-role-runner').className='flex-1 py-1.5 rounded-lg text-xs font-black bg-sky-600 text-white';
+  document.getElementById('tag-role-seeker').className='flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400';
+});
+document.getElementById('tag-role-seeker').addEventListener('click',()=>{
+  gameState.tagRole='seeker';
+  document.getElementById('tag-role-seeker').className='flex-1 py-1.5 rounded-lg text-xs font-black bg-rose-600 text-white';
+  document.getElementById('tag-role-runner').className='flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400';
+});
 
-document.getElementById('start-fps-btn').addEventListener('click',()=>startGame('fps'));
-document.getElementById('start-tag-btn').addEventListener('click',()=>startGame('tag'));
-document.getElementById('start-prophunt-btn').addEventListener('click',()=>startGame('prophunt'));
+document.getElementById('ph-role-hider').addEventListener('click',()=>{
+  gameState.phRole='hider';
+  document.getElementById('ph-role-hider').className='flex-1 py-1.5 rounded-lg text-xs font-black bg-emerald-600 text-white';
+  document.getElementById('ph-role-seeker').className='flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400';
+});
+document.getElementById('ph-role-seeker').addEventListener('click',()=>{
+  gameState.phRole='seeker';
+  document.getElementById('ph-role-seeker').className='flex-1 py-1.5 rounded-lg text-xs font-black bg-rose-600 text-white';
+  document.getElementById('ph-role-hider').className='flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-400';
+});
+
+document.getElementById('start-fps-btn').addEventListener('click',()=>startGame('fps', false));
+document.getElementById('start-tag-btn').addEventListener('click',()=>startGame('tag', false));
+document.getElementById('start-prophunt-btn').addEventListener('click',()=>startGame('prophunt', false));
+document.getElementById('btn-replay').addEventListener('click',()=>startGame(gameState.mode, false));
+document.getElementById('btn-back-title').addEventListener('click',()=>{
+  document.getElementById('result-screen').classList.add('hidden');
+  document.getElementById('title-screen').classList.remove('hidden');document.getElementById('title-screen').classList.add('flex');
+  gameState.screen='title';
+  updateKeybindGuideUI();
+  refreshLobbyMatchUI();
+});
 document.getElementById('btn-quit').addEventListener('click',()=>endGame(false,true));
-document.getElementById('btn-back-title').addEventListener('click',()=>endGame(false,true));
-document.getElementById('btn-replay').addEventListener('click',()=>startGame(gameState.mode));
-document.getElementById('btn-sound').addEventListener('click',()=>{document.getElementById('btn-sound').textContent=sound.toggleMute()?'🔇':'🔊';});
-document.getElementById('btn-jump').addEventListener('click',triggerJump);
-document.getElementById('btn-skill').addEventListener('click',triggerSkill);
-document.getElementById('btn-morph').addEventListener('click',triggerMorph);
-document.getElementById('btn-lock').addEventListener('click',triggerLock);
-document.getElementById('btn-taunt').addEventListener('click',triggerTaunt);
-document.getElementById('btn-use-heal').addEventListener('click',useSelectedHeal);
-document.getElementById('btn-drop-slot').addEventListener('click',()=>dropHotbarSlotItem(gameState.fps.selectedSlot));
-document.getElementById('btn-open-bag').addEventListener('click',openBagModal);
-document.getElementById('btn-close-bag').addEventListener('click',closeBagModal);
+document.getElementById('btn-sound').addEventListener('click',()=>{
+  const m=sound.toggleMute();document.getElementById('btn-sound').textContent=m?'🔇':'🔊';
+});
 
-const mobileInteractBtn = document.getElementById('btn-interact-mobile');
-if(mobileInteractBtn){
-  mobileInteractBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); triggerInteractPress(); });
-  mobileInteractBtn.addEventListener('pointerup', (e)=>{ e.preventDefault(); triggerInteractRelease(); });
-  mobileInteractBtn.addEventListener('pointerleave', ()=>triggerInteractRelease());
-}
+document.getElementById('btn-jump').addEventListener('pointerdown',(e)=>{e.stopPropagation();triggerJump();});
+document.getElementById('btn-skill').addEventListener('pointerdown',(e)=>{e.stopPropagation();triggerSkill();});
+document.getElementById('btn-morph').addEventListener('pointerdown',(e)=>{e.stopPropagation();triggerMorph();});
+document.getElementById('btn-lock').addEventListener('pointerdown',(e)=>{e.stopPropagation();triggerLock();});
+document.getElementById('btn-taunt').addEventListener('pointerdown',(e)=>{e.stopPropagation();triggerTaunt();});
 
-const mobileShootBtn = document.getElementById('btn-shoot-mobile');
-if(mobileShootBtn){
-  mobileShootBtn.addEventListener('pointerdown', (e)=>{
-    e.preventDefault();
-    gameState.isFireHeld = true;
-    shootGun();
-  });
-  mobileShootBtn.addEventListener('pointerup', (e)=>{
-    e.preventDefault();
-    gameState.isFireHeld = false;
-  });
-  mobileShootBtn.addEventListener('pointerleave', ()=>{
-    gameState.isFireHeld = false;
-  });
-}
+const btnShootMob = document.getElementById('btn-shoot-mobile');
+btnShootMob.addEventListener('pointerdown',(e)=>{e.stopPropagation();gameState.isFireHeld=true;shootGun();});
+btnShootMob.addEventListener('pointerup',(e)=>{e.stopPropagation();gameState.isFireHeld=false;});
+btnShootMob.addEventListener('pointercancel',()=>{gameState.isFireHeld=false;});
 
-const mobileAdsBtn = document.getElementById('btn-ads-mobile');
-if(mobileAdsBtn){
-  mobileAdsBtn.addEventListener('pointerdown', (e)=>{
-    e.preventDefault();
-    setAimingState(!gameState.isAiming);
-  });
-}
+const btnAdsMob = document.getElementById('btn-ads-mobile');
+btnAdsMob.addEventListener('pointerdown',(e)=>{e.stopPropagation();setAimingState(!gameState.isAiming);});
+
+const btnInteractMob = document.getElementById('btn-interact-mobile');
+btnInteractMob.addEventListener('pointerdown',(e)=>{e.stopPropagation();triggerInteractPress();});
+btnInteractMob.addEventListener('pointerup',(e)=>{e.stopPropagation();triggerInteractRelease();});
+btnInteractMob.addEventListener('pointercancel',()=>{triggerInteractRelease();});
+
+document.getElementById('btn-use-heal').addEventListener('pointerdown',(e)=>{e.stopPropagation();useSelectedHeal();});
+document.getElementById('btn-drop-slot').addEventListener('click',(e)=>{
+  e.stopPropagation();
+  dropHotbarSlotItem(gameState.fps.selectedSlot);
+});
+document.getElementById('btn-open-bag').addEventListener('click',(e)=>{
+  e.stopPropagation();
+  if(gameState.bagOpen) closeBagModal();
+  else openBagModal();
+});
+document.getElementById('btn-close-bag').addEventListener('click',(e)=>{
+  e.stopPropagation();
+  closeBagModal();
+});
+
+window.addEventListener('wheel',(e)=>{
+  if(gameState.mode !== 'fps' || gameState.screen !== 'playing' || gameState.paused || gameState.bagOpen) return;
+  const dir = e.deltaY > 0 ? 1 : -1;
+  const next = (gameState.fps.selectedSlot + dir + 5) % 5;
+  selectHotbarSlot(next);
+});
 
 window.addEventListener('keydown',(e)=>{
-  if(e.code === 'KeyB' && gameState.screen==='playing' && gameState.mode==='fps' && !gameState.paused){
-    e.preventDefault();
-    if(gameState.bagOpen) closeBagModal(); else openBagModal();
-    return;
-  }
-
-  if(gameState.paused || gameState.bagOpen)return;
-
-  if(e.code==='KeyE' && !e.repeat){
-    triggerInteractPress();
-  }
-
   keys[e.code]=true;
-  if(e.code==='Space'){if(gameState.screen==='playing')e.preventDefault();triggerJump();}
-  if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyR')triggerSkill();
-  if(e.code==='KeyQ')triggerLock();
-  if(e.code==='KeyF')triggerTaunt();
-  if(e.code==='KeyH')useSelectedHeal();
-  if(e.code==='KeyG')dropHotbarSlotItem(gameState.fps.selectedSlot);
+  if(gameState.screen==='playing' && gameState.mode==='fps' && !gameState.paused){
+    if(e.code==='KeyB'){
+      e.preventDefault();
+      if(gameState.bagOpen) closeBagModal();
+      else openBagModal();
+      return;
+    }
+    if(gameState.bagOpen) return;
 
-  if(gameState.mode === 'fps' && gameState.screen === 'playing'){
-    if(e.code === 'Digit1') selectHotbarSlot(0);
-    if(e.code === 'Digit2') selectHotbarSlot(1);
-    if(e.code === 'Digit3') selectHotbarSlot(2);
-    if(e.code === 'Digit4') selectHotbarSlot(3);
-    if(e.code === 'Digit5') selectHotbarSlot(4);
+    if(e.code==='Digit1') selectHotbarSlot(0);
+    if(e.code==='Digit2') selectHotbarSlot(1);
+    if(e.code==='Digit3') selectHotbarSlot(2);
+    if(e.code==='Digit4') selectHotbarSlot(3);
+    if(e.code==='Digit5') selectHotbarSlot(4);
+    if(e.code==='KeyG') dropHotbarSlotItem(gameState.fps.selectedSlot);
+    if(e.code==='KeyH') useSelectedHeal();
+  }
+
+  if(gameState.screen==='playing'&&!gameState.paused&&!gameState.bagOpen){
+    if(e.code==='Space'){e.preventDefault();triggerJump();}
+    if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyR'){
+      if(e.code==='KeyR' && !canUseGun()) return;
+      triggerSkill();
+    }
+    if(e.code==='KeyE' && !e.repeat){
+      triggerInteractPress();
+    }
+    if(e.code==='KeyQ')triggerLock();
+    if(e.code==='KeyF')triggerTaunt();
   }
 });
 
@@ -4538,32 +4798,65 @@ window.addEventListener('keyup',(e)=>{
   }
 });
 
-window.addEventListener('wheel',(e)=>{
-  if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen) return;
-  if(gameState.mode === 'fps'){
-    const dir = e.deltaY > 0 ? 1 : -1;
-    const next = (gameState.fps.selectedSlot + dir + 5) % 5;
-    selectHotbarSlot(next);
-  }
-}, { passive:true });
-
-const joyZone=document.getElementById('joystick-zone'),joyKnob=document.getElementById('joystick-knob');
-joyZone.addEventListener('touchstart',(e)=>{e.preventDefault();const t=e.changedTouches[0];joystick.active=true;joystick.touchId=t.identifier;updateJoy(t);},{passive:false});
-joyZone.addEventListener('touchmove',(e)=>{e.preventDefault();for(const t of e.changedTouches)if(t.identifier===joystick.touchId)updateJoy(t);},{passive:false});
-const endJoy=(e)=>{for(const t of e.changedTouches)if(t.identifier===joystick.touchId){joystick.active=false;joystick.dx=0;joystick.dy=0;joyKnob.style.transform='translate(0px,0px)';}};
-joyZone.addEventListener('touchend',endJoy);joyZone.addEventListener('touchcancel',endJoy);
-function updateJoy(t){
-  const r=joyZone.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
-  let dx=t.clientX-cx,dy=t.clientY-cy;const dist=Math.hypot(dx,dy),maxD=42;
-  if(dist>maxD){dx=(dx/dist)*maxD;dy=(dy/dist)*maxD;}
-  joyKnob.style.transform=`translate(${dx}px,${dy}px)`;joystick.dx=dx/maxD;joystick.dy=dy/maxD;
+const joyZone=document.getElementById('joystick-zone'), joyKnob=document.getElementById('joystick-knob');
+function updateJoystick(cx,cy){
+  const rect=joyZone.getBoundingClientRect();
+  let dx=cx-(rect.left+rect.width/2), dy=cy-(rect.top+rect.height/2);
+  const maxR=rect.width*0.38, dist=Math.hypot(dx,dy);
+  if(dist>maxR){dx=(dx/dist)*maxR;dy=(dy/dist)*maxR;}
+  joyKnob.style.transform=`translate(${dx}px,${dy}px)`;
+  joystick.dx=dx/maxR;joystick.dy=dy/maxR;
 }
+joyZone.addEventListener('touchstart',(e)=>{
+  e.preventDefault();const t=e.changedTouches[0];
+  joystick.active=true;joystick.touchId=t.identifier;updateJoystick(t.clientX,t.clientY);
+},{passive:false});
+window.addEventListener('touchmove',(e)=>{
+  for(let i=0;i<e.changedTouches.length;i++){
+    const t=e.changedTouches[i];
+    if(joystick.active&&t.identifier===joystick.touchId){
+      e.preventDefault();updateJoystick(t.clientX,t.clientY);
+    } else if(camCtrl.touchId===t.identifier){
+      const dx=t.clientX-camCtrl.lastX, dy=t.clientY-camCtrl.lastY;
+      camCtrl.lastX=t.clientX;camCtrl.lastY=t.clientY;
+      const sensScale = gameState.isAiming ? 0.52 : 1.0;
+      if(canUseGun() || gameState.mode==='fps'){
+        player.fpsYaw-=dx*0.006*sensScale;
+        player.fpsPitch=Math.max(-1.35,Math.min(1.35,player.fpsPitch-dy*0.006*sensScale));
+      } else {
+        camCtrl.yaw-=dx*0.007;
+        camCtrl.pitch=Math.max(-0.2,Math.min(1.3,camCtrl.pitch+dy*0.007));
+      }
+    }
+  }
+},{passive:false});
+window.addEventListener('touchend',(e)=>{
+  for(let i=0;i<e.changedTouches.length;i++){
+    const t=e.changedTouches[i];
+    if(joystick.active&&t.identifier===joystick.touchId){
+      joystick.active=false;joystick.touchId=null;joystick.dx=0;joystick.dy=0;joyKnob.style.transform='translate(0,0)';
+    }
+    if(camCtrl.touchId===t.identifier)camCtrl.touchId=null;
+  }
+});
+canvasEl.addEventListener('touchstart',(e)=>{
+  if(e.target===canvasEl&&camCtrl.touchId===null){
+    const t=e.changedTouches[0];camCtrl.touchId=t.identifier;camCtrl.lastX=t.clientX;camCtrl.lastY=t.clientY;
+  }
+},{passive:true});
 
-renderer.domElement.addEventListener('touchstart',(e)=>{if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen)return;const t=e.changedTouches[0];if(camCtrl.touchId===null){camCtrl.touchId=t.identifier;camCtrl.lastX=t.clientX;camCtrl.lastY=t.clientY;}},{passive:true});
-renderer.domElement.addEventListener('touchmove',(e)=>{if(gameState.screen!=='playing'||gameState.paused||gameState.bagOpen)return;for(const t of e.changedTouches)if(t.identifier===camCtrl.touchId){const dx=t.clientX-camCtrl.lastX,dy=t.clientY-camCtrl.lastY;camCtrl.lastX=t.clientX;camCtrl.lastY=t.clientY;if(canUseGun() || gameState.mode==='fps'){player.fpsYaw-=dx*0.005;player.fpsPitch=Math.max(-1.35,Math.min(1.35,player.fpsPitch-dy*0.005));}else{camCtrl.yaw-=dx*0.007;camCtrl.pitch=Math.max(-0.2,Math.min(1.3,camCtrl.pitch+dy*0.007));}}},{passive:true});
-const endCamTouch=(e)=>{for(const t of e.changedTouches)if(t.identifier===camCtrl.touchId)camCtrl.touchId=null;};
-renderer.domElement.addEventListener('touchend',endCamTouch);renderer.domElement.addEventListener('touchcancel',endCamTouch);
-
+function animate(now){
+  requestAnimationFrame(animate);
+  const dt=Math.min(0.05,(now-(gameState.lastTime||now))/1000);
+  gameState.lastTime=now;
+  if(gameState.screen==='playing')update(dt);
+  else{
+    const t=now*0.0002;
+    camera.position.set(Math.sin(t)*34,16,Math.cos(t)*34);
+    camera.lookAt(0,1,0);
+  }
+  renderer.render(scene,camera);
+}
 build3DWorld('fps');
 requestAnimationFrame(animate);
 </script>
