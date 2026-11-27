@@ -548,6 +548,56 @@ const APP = {
 };
 
 // ==========================================
+// 必須グローバル変数（プレイヤー・カメラ・ワールド・入力）
+// ==========================================
+const keys = {};
+const joystick = { active:false, touchId:null, dx:0, dy:0 };
+const camCtrl = {
+  yaw: Math.PI,
+  pitch: 0.28,
+  dist: 6.2,
+  targetDist: 6.2,
+  touchId: null,
+  lastX: 0,
+  lastY: 0
+};
+const player = {
+  pos: new THREE.Vector3(0, 0, 20),
+  vel: new THREE.Vector3(0, 0, 0),
+  rotY: Math.PI,
+  fpsYaw: Math.PI,
+  fpsPitch: 0,
+  radius: 0.48,
+  height: 1.7,
+  speed: 10.5,
+  jumpForce: 11.5,
+  onGround: true,
+  mesh: null,
+  weaponMesh: null,
+  disguise: null,
+  locked: false,
+  lockedRotY: 0,
+  targetedProp: null,
+  targetedPickup: null,
+  skillCooldown: 0,
+  skillMaxCooldown: 3.0,
+  dashTimer: 0,
+  tauntCooldown: 0
+};
+
+let worldGroup = new THREE.Group();
+let colliders = [];
+let propsList = [];
+let jumpPads = [];
+let coinsList = [];
+let seekersList = [];
+let runnersList = [];
+let fxList = [];
+let fpsBots = [];
+let remotePlayers = {};
+const raycaster = new THREE.Raycaster();
+
+// ==========================================
 // Sound Engine
 // ==========================================
 class SoundEngine {
@@ -891,7 +941,7 @@ window.addEventListener('resize',()=>{
 // ==========================================
 const gameState={
   screen:'auth',mode:'fps',tagRole:'runner',phRole:'hider',
-  timer:FPS_MATCH_DURATION_SEC,score:0,hp:3,maxHp:3,invulnTimer:0,lastTime:0,
+  timer:FPS_MATCH_DURATION_SEC,score:0,hp:3,maxHp:3,invulnTimer:0,lastTime:performance.now(),
   paused:false,
   bagOpen:false,
   seekerStunTimer:0,
@@ -2601,9 +2651,9 @@ function resolveHorizontalCollisions(pos,radius,currentY){
             pos.z+=(dz/d)*ov;
           } else {
             const penLeft = Math.abs(pos.x - c.minX);
-            const penRight = Math.abs(c.maxX - pos.x);
+            const penRight = Math.abs(pos.x - c.maxX);
             const penTop = Math.abs(pos.z - c.minZ);
-            const penBottom = Math.abs(c.maxZ - pos.z);
+            const penBottom = Math.abs(pos.z - c.maxZ);
             const minPen = Math.min(penLeft, penRight, penTop, penBottom);
             if(minPen === penLeft) pos.x = c.minX - radius;
             else if(minPen === penRight) pos.x = c.maxX + radius;
